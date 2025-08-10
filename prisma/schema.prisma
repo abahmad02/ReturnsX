@@ -1,0 +1,143 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+// ReturnsX Risk Management Models
+
+model CustomerProfile {
+  id                    String         @id @default(cuid())
+  phoneHash             String         @unique @map("phone_hash") @db.VarChar(255)
+  emailHash             String?        @map("email_hash") @db.VarChar(255)
+  addressHash           String?        @map("address_hash") @db.VarChar(255)
+  totalOrders           Int            @default(0) @map("total_orders")
+  failedAttempts        Int            @default(0) @map("failed_attempts")
+  successfulDeliveries  Int            @default(0) @map("successful_deliveries")
+  returnRate            Decimal        @default(0.0) @map("return_rate") @db.Decimal(5, 2)
+  riskScore             Decimal        @default(0.0) @map("risk_score") @db.Decimal(5, 2)
+  riskTier              RiskTier       @default(ZERO_RISK) @map("risk_tier")
+  lastEventAt           DateTime       @default(now()) @map("last_event_at")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  
+  // Relations
+  orderEvents           OrderEvent[]
+  manualOverrides       ManualOverride[]
+
+  @@index([phoneHash])
+  @@index([emailHash])
+  @@index([addressHash])
+  @@index([riskTier])
+  @@map("customer_profiles")
+}
+
+model OrderEvent {
+  id                String              @id @default(cuid())
+  customerProfileId String              @map("customer_profile_id")
+  shopDomain        String              @map("shop_domain")
+  shopifyOrderId    String              @map("shopify_order_id")
+  eventType         OrderEventType      @map("event_type")
+  orderValue        Decimal?            @map("order_value") @db.Decimal(10, 2)
+  currency          String?             @db.VarChar(3)
+  cancelReason      String?             @map("cancel_reason")
+  fulfillmentStatus String?             @map("fulfillment_status")
+  refundAmount      Decimal?            @map("refund_amount") @db.Decimal(10, 2)
+  eventData         Json?               @map("event_data")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  
+  // Relations
+  customerProfile   CustomerProfile     @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([customerProfileId])
+  @@index([shopDomain])
+  @@index([shopifyOrderId])
+  @@index([eventType])
+  @@map("order_events")
+}
+
+model ManualOverride {
+  id                String          @id @default(cuid())
+  customerProfileId String          @map("customer_profile_id")
+  shopDomain        String          @map("shop_domain")
+  adminUserId       String?         @map("admin_user_id")
+  overrideType      OverrideType    @map("override_type")
+  previousValue     String?         @map("previous_value")
+  newValue          String          @map("new_value")
+  reason            String?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([customerProfileId])
+  @@index([shopDomain])
+  @@map("manual_overrides")
+}
+
+model RiskConfig {
+  id                    String    @id @default(cuid())
+  shopDomain            String    @unique @map("shop_domain")
+  zeroRiskMaxFailed     Int       @default(2) @map("zero_risk_max_failed")
+  zeroRiskMaxReturnRate Decimal   @default(10.0) @map("zero_risk_max_return_rate") @db.Decimal(5, 2)
+  mediumRiskMaxFailed   Int       @default(5) @map("medium_risk_max_failed")
+  mediumRiskMaxReturnRate Decimal @default(30.0) @map("medium_risk_max_return_rate") @db.Decimal(5, 2)
+  highRiskThreshold     Decimal   @default(30.0) @map("high_risk_threshold") @db.Decimal(5, 2)
+  enableCodRestriction  Boolean   @default(true) @map("enable_cod_restriction")
+  depositPercentage     Decimal   @default(50.0) @map("deposit_percentage") @db.Decimal(5, 2)
+  notificationEmail     String?   @map("notification_email")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("risk_configs")
+}
+
+// Enums
+enum RiskTier {
+  ZERO_RISK
+  MEDIUM_RISK
+  HIGH_RISK
+}
+
+enum OrderEventType {
+  ORDER_CREATED
+  ORDER_UPDATED
+  ORDER_CANCELLED
+  ORDER_FULFILLED
+  ORDER_REFUNDED
+  ORDER_DELIVERED
+}
+
+enum OverrideType {
+  RESET_FAILED_ATTEMPTS
+  CHANGE_RISK_TIER
+  FORGIVE_CUSTOMER
+  MANUAL_VERIFICATION
+}

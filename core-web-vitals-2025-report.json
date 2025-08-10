@@ -1,0 +1,26 @@
+{
+  "timestamp": "2025-08-09T22:48:00.420Z",
+  "testType": "2025 Shopify App Store Core Web Vitals",
+  "results": [
+    {
+      "name": "Local Development Server",
+      "url": "http://localhost:52805",
+      "lcp": 1477,
+      "cls": 0,
+      "inp": 0,
+      "performanceScore": 91,
+      "lcpPass": true,
+      "clsPass": true,
+      "inpPass": true,
+      "scorePass": true,
+      "testPassed": true
+    }
+  ],
+  "allTestsPassed": true,
+  "requirements": {
+    "lcp": "<2500ms",
+    "cls": "<0.1",
+    "inp": "<200ms",
+    "performanceScore": "90+"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "returnsx-submission-tools",
+  "version": "1.0.0",
+  "description": "Tools and scripts for ReturnsX App Store submission",
+  "scripts": {
+    "setup:demo": "node demo-store-setup.js",
+    "test:performance": "node performance-test.js run",
+    "test:browsers": "echo 'Manual browser testing required - see performance-test.js'",
+    "validate:listing": "node validate-app-listing.js",
+    "check:requirements": "node check-requirements.js",
+    "create:screenshots": "node create-screenshots.js",
+    "submission:checklist": "node submission-checklist.js"
+  },
+  "devDependencies": {
+    "lighthouse": "^10.4.0",
+    "chrome-launcher": "^0.15.2",
+    "puppeteer": "^21.0.3"
+  }
+}
