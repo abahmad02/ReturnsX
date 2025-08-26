@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { json } from "@remix-run/node";
 import { logger } from "../services/logger.server";
+import { verifyWebhookSignature } from "../services/webhookRegistration.server";
 
 /**
  * Webhook handler for customers/data_request
@@ -10,11 +11,43 @@ import { logger } from "../services/logger.server";
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    const { topic, shop, payload } = await authenticate.webhook(request);
+    // Get raw body for signature verification
+    const rawBody = await request.text();
+    const signature = request.headers.get("X-Shopify-Hmac-Sha256");
+    const topic = request.headers.get("X-Shopify-Topic");
+    const shop = request.headers.get("X-Shopify-Shop-Domain");
 
-    if (topic !== "CUSTOMERS_DATA_REQUEST") {
-      return new Response("Webhook topic not supported", { status: 404 });
+    // MANDATORY: Verify webhook signature for compliance webhooks
+    if (!signature) {
+      logger.warn("Missing webhook signature", { component: "privacyCompliance" });
+      return json({ error: "Missing signature" }, { status: 401 });
     }
+
+    if (!process.env.SHOPIFY_WEBHOOK_SECRET) {
+      logger.error("Missing webhook secret", { component: "privacyCompliance" });
+      return json({ error: "Server configuration error" }, { status: 500 });
+    }
+
+    const isValid = verifyWebhookSignature(
+      rawBody,
+      signature,
+      process.env.SHOPIFY_WEBHOOK_SECRET
+    );
+    
+    if (!isValid) {
+      logger.warn("Invalid webhook signature for customer data request", { 
+        shopDomain: shop,
+        component: "privacyCompliance" 
+      });
+      return json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    if (topic !== "customers/data_request") {
+      return json({ error: "Webhook topic not supported" }, { status: 404 });
+    }
+
+    // Parse the payload
+    const payload = JSON.parse(rawBody);
 
     logger.info("Customer data request received", {
       shopDomain: shop,
@@ -24,17 +57,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     // Handle the data request
-    await handleCustomerDataRequest(payload, shop);
+    await handleCustomerDataRequest(payload, shop || "unknown");
 
-    return new Response("OK", { status: 200 });
+    return json({ status: "ok" }, { status: 200 });
 
   } catch (error) {
+    // Check if this is an authentication/signature error
+    if (error instanceof Error && 
+        (error.message.includes("signature") || 
+         error.message.includes("authentication") ||
+         error.message.includes("unauthorized"))) {
+      logger.warn("Authentication failed for customer data request webhook", {
+        error: error.message,
+        component: "privacyCompliance"
+      });
+      return json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     logger.error("Failed to process customer data request", {
       error: error instanceof Error ? error.message : String(error),
       component: "privacyCompliance"
     });
     
-    return new Response("Internal Server Error", { status: 500 });
+    return json({ error: "Internal Server Error" }, { status: 500 });
   }
 };
 

@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { json } from "@remix-run/node";
 import { logger } from "../services/logger.server";
+import { verifyWebhookSignature } from "../services/webhookRegistration.server";
 import db from "../db.server";
 
 /**
@@ -11,11 +12,43 @@ import db from "../db.server";
  */
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    const { topic, shop, payload } = await authenticate.webhook(request);
+    // Get raw body for signature verification
+    const rawBody = await request.text();
+    const signature = request.headers.get("X-Shopify-Hmac-Sha256");
+    const topic = request.headers.get("X-Shopify-Topic");
+    const shop = request.headers.get("X-Shopify-Shop-Domain");
 
-    if (topic !== "SHOP_REDACT") {
-      return new Response("Webhook topic not supported", { status: 404 });
+    // MANDATORY: Verify webhook signature for compliance webhooks
+    if (!signature) {
+      logger.warn("Missing webhook signature", { component: "privacyCompliance" });
+      return json({ error: "Missing signature" }, { status: 401 });
     }
+
+    if (!process.env.SHOPIFY_WEBHOOK_SECRET) {
+      logger.error("Missing webhook secret", { component: "privacyCompliance" });
+      return json({ error: "Server configuration error" }, { status: 500 });
+    }
+
+    const isValid = verifyWebhookSignature(
+      rawBody,
+      signature,
+      process.env.SHOPIFY_WEBHOOK_SECRET
+    );
+    
+    if (!isValid) {
+      logger.warn("Invalid webhook signature for shop redaction", { 
+        shopDomain: shop,
+        component: "privacyCompliance" 
+      });
+      return json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    if (topic !== "shop/redact") {
+      return json({ error: "Webhook topic not supported" }, { status: 404 });
+    }
+
+    // Parse the payload
+    const payload = JSON.parse(rawBody);
 
     logger.info("Shop redaction request received", {
       shopDomain: shop,
@@ -26,15 +59,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Handle the shop data redaction
     await handleShopRedaction(payload);
 
-    return new Response("OK", { status: 200 });
+    return json({ status: "ok" }, { status: 200 });
 
   } catch (error) {
+    // Check if this is an authentication/signature error
+    if (error instanceof Error && 
+        (error.message.includes("signature") || 
+         error.message.includes("authentication") ||
+         error.message.includes("unauthorized"))) {
+      logger.warn("Authentication failed for shop redaction webhook", {
+        error: error.message,
+        component: "privacyCompliance"
+      });
+      return json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     logger.error("Failed to process shop redaction", {
       error: error instanceof Error ? error.message : String(error),
       component: "privacyCompliance"
     });
     
-    return new Response("Internal Server Error", { status: 500 });
+    return json({ error: "Internal Server Error" }, { status: 500 });
   }
 };
 
