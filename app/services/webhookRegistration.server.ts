@@ -86,7 +86,8 @@ export async function registerReturnxWebhooks(
       }
     } catch (error) {
       console.error(`✗ Error registering webhook: ${webhook.topic}`, error);
-      errors.push(`${webhook.topic}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      errors.push(`${webhook.topic}: ${errorMessage}`);
     }
   }
 
@@ -247,7 +248,7 @@ export async function registerWebhooksForAuthenticatedShop(
     return {
       success: false,
       registered: [],
-      errors: [error?.toString() || 'Unknown authentication error'],
+      errors: [error instanceof Error ? error.message : String(error)],
     };
   }
 } 

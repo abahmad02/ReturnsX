@@ -50,7 +50,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       highRiskCustomers: highRiskCustomers.map((customer: any) => ({
         id: customer.id,
         phoneHash: customer.phoneHash.substring(0, 8) + "...",
-        riskScore: customer.riskScore,
+        riskScore: Number(customer.riskScore),
         riskTier: customer.riskTier,
         totalOrders: customer.totalOrders,
         failedAttempts: customer.failedAttempts,
@@ -140,7 +140,7 @@ export default function Dashboard() {
     <Badge tone={customer.riskTier === "HIGH_RISK" ? "critical" : "attention"} key={customer.id}>
       {customer.riskTier.replace("_", " ")}
     </Badge>,
-    customer.riskScore.toFixed(1),
+    (Number(customer.riskScore) || 0).toFixed(1),
     customer.totalOrders,
     customer.failedAttempts,
     new Date(customer.lastEventAt).toLocaleDateString(),
@@ -191,7 +191,7 @@ export default function Dashboard() {
                       <InlineStack gap="200" align="center">
                         <Icon source={CheckCircleIcon} tone="base" />
                         <Text as="h3" variant="headingMd">
-                          {(stats as any).averageRiskScore?.toFixed(1) || "0.0"}
+                          {(Number((stats as any).averageRiskScore) || 0).toFixed(1)}
                         </Text>
                       </InlineStack>
                       <Text as="p" variant="bodyMd" tone="subdued">

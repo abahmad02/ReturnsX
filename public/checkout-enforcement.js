@@ -275,12 +275,28 @@
     });
   }
 
+  // Check if we're on a checkout page
+  function isCheckoutPage() {
+    return window.location.pathname.includes('/checkout') || 
+           window.location.pathname.includes('/checkouts') ||
+           document.querySelector('form[action*="checkout"]') ||
+           document.querySelector('[data-step="contact_information"]') ||
+           document.querySelector('.checkout-step') ||
+           window.Shopify && window.Shopify.checkout;
+  }
+
   // Main checkout enforcement logic
   const ReturnsXCheckout = {
     currentRiskData: null,
     codPaymentBlocked: false,
 
     init: function() {
+      // Only initialize on checkout pages
+      if (!isCheckoutPage()) {
+        console.log('ReturnsX: Not a checkout page, skipping initialization');
+        return;
+      }
+      
       console.log('ReturnsX: Initializing checkout enforcement...');
       this.attachEventListeners();
       this.checkCustomerRisk();

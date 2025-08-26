@@ -24,7 +24,6 @@ export interface CreateCustomerProfileData {
   phone?: string;
   email?: string;
   address?: string;
-  shopDomain: string;
 }
 
 export interface OrderEventData {
@@ -43,10 +42,11 @@ export interface OrderEventData {
  * Primary lookup method for customer risk assessment
  */
 export async function getOrCreateCustomerProfile(
-  customerData: CreateCustomerProfileData
+  customerData: CreateCustomerProfileData,
+  shopDomain?: string
 ): Promise<CustomerProfile> {
   const timer = new PerformanceTimer("get_or_create_customer_profile", {
-    shopDomain: customerData.shopDomain,
+    shopDomain: shopDomain || "unknown",
   });
 
   try {
@@ -108,12 +108,16 @@ export async function getOrCreateCustomerProfile(
         phoneHash: hashedIdentifiers.phoneHash,
         emailHash: hashedIdentifiers.emailHash,
         addressHash: hashedIdentifiers.addressHash,
+        // Ensure default values are explicitly set
+        riskScore: 0.0,
+        returnRate: 0.0,
+        riskTier: "ZERO_RISK",
       },
     });
 
     logger.customerProfileCreated(
       newProfile.id,
-      customerData.shopDomain,
+      shopDomain || "unknown",
       newProfile.riskTier
     );
 
@@ -123,7 +127,7 @@ export async function getOrCreateCustomerProfile(
   } catch (error) {
     timer.finishWithError(
       error instanceof Error ? error : new Error(String(error)),
-      { shopDomain: customerData.shopDomain }
+      { shopDomain: shopDomain || "unknown" }
     );
     throw error;
   }
@@ -202,6 +206,22 @@ export async function recordOrderEvent(
   });
 
   try {
+    // Check if this order event already exists to prevent duplicates
+    const existingEvent = await (prisma as any).orderEvent.findFirst({
+      where: {
+        customerProfileId: customerProfile.id,
+        shopifyOrderId: eventData.shopifyOrderId,
+        eventType: eventData.eventType,
+        shopDomain,
+      },
+    });
+
+    if (existingEvent) {
+      console.log(`Order event already exists: ${eventData.shopifyOrderId} (${eventData.eventType}) - skipping duplicate`);
+      timer.finish({ action: "skipped_duplicate", orderId: eventData.shopifyOrderId });
+      return customerProfile;
+    }
+
     // Create the order event record
     await (prisma as any).orderEvent.create({
       data: {
@@ -218,38 +238,57 @@ export async function recordOrderEvent(
       },
     });
 
-    // Update customer profile counters based on event type
-    const updateData: any = {};
+    // Recalculate counters from all events to ensure accuracy
+    const allEvents = await (prisma as any).orderEvent.findMany({
+      where: {
+        customerProfileId: customerProfile.id,
+      },
+    });
 
-    switch (eventData.eventType) {
-      case "ORDER_CREATED":
-        updateData.totalOrders = customerProfile.totalOrders + 1;
-        break;
-      
-      case "ORDER_CANCELLED":
-        // Consider cancelled orders as failed attempts if due to customer refusal
-        if (eventData.cancelReason && 
-            ['customer_refused', 'delivery_failed', 'customer_unavailable'].includes(eventData.cancelReason.toLowerCase())) {
-          updateData.failedAttempts = customerProfile.failedAttempts + 1;
-        }
-        break;
-      
-      case "ORDER_FULFILLED":
-      case "ORDER_DELIVERED":
-        updateData.successfulDeliveries = customerProfile.successfulDeliveries + 1;
-        break;
-      
-      case "ORDER_REFUNDED":
-        // Refunds count as failed attempts for COD risk assessment
-        updateData.failedAttempts = customerProfile.failedAttempts + 1;
-        break;
+    // Calculate accurate counters from all events
+    let totalOrders = 0;
+    let failedAttempts = 0;
+    let successfulDeliveries = 0;
+    
+    // Track unique orders to avoid double counting
+    const uniqueOrderIds = new Set();
+
+    for (const event of allEvents) {
+      switch (event.eventType) {
+        case "ORDER_CREATED":
+          if (!uniqueOrderIds.has(event.shopifyOrderId)) {
+            totalOrders++;
+            uniqueOrderIds.add(event.shopifyOrderId);
+          }
+          break;
+        
+        case "ORDER_CANCELLED":
+          // Consider cancelled orders as failed attempts if due to customer refusal
+          if (event.cancelReason && 
+              ['customer_refused', 'delivery_failed', 'customer_unavailable'].includes(event.cancelReason.toLowerCase())) {
+            failedAttempts++;
+          }
+          break;
+        
+        case "ORDER_FULFILLED":
+        case "ORDER_DELIVERED":
+          successfulDeliveries++;
+          break;
+        
+        case "ORDER_REFUNDED":
+          // Refunds count as failed attempts for COD risk assessment
+          failedAttempts++;
+          break;
+      }
     }
 
-    // Update the profile with new counters
+    // Update the profile with recalculated counters
     const updatedProfile = await (prisma as any).customerProfile.update({
       where: { id: customerProfile.id },
       data: {
-        ...updateData,
+        totalOrders,
+        failedAttempts,
+        successfulDeliveries,
         lastEventAt: new Date(),
       },
     });
@@ -362,7 +401,7 @@ export async function getCustomerProfileStats(shopDomain?: string) {
         mediumRisk: total > 0 ? Math.round((mediumRisk / total) * 100) : 0,
         highRisk: total > 0 ? Math.round((highRisk / total) * 100) : 0,
       },
-      averageRiskScore: averageRiskScore._avg.riskScore || 0,
+      averageRiskScore: averageRiskScore._avg.riskScore ? Number(averageRiskScore._avg.riskScore) : 0,
       recentEvents,
       lastUpdated: new Date().toISOString(),
     };

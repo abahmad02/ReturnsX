@@ -104,15 +104,69 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }, { status: 400 });
     }
 
-  } catch (error) {
+  } catch (error: any) {
+    let errorMessage = "Failed to perform action";
+    let errorDetails = {};
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (error?.response) {
+      // Handle Shopify REST API response errors
+      const status = error.response.status || 'Unknown';
+      const statusText = error.response.statusText || 'Unknown error';
+      errorMessage = `HTTP ${status}: ${statusText}`;
+      
+      // Try to extract more details from the response body
+      if (error.response.body) {
+        try {
+          const responseBody = typeof error.response.body === 'string' 
+            ? JSON.parse(error.response.body) 
+            : error.response.body;
+          
+          if (responseBody.errors) {
+            errorMessage += ` - ${JSON.stringify(responseBody.errors)}`;
+            errorDetails = { responseErrors: responseBody.errors };
+          }
+        } catch (parseError) {
+          errorDetails = { rawResponseBody: String(error.response.body) };
+        }
+      }
+    } else if (error instanceof Response) {
+      // Handle Response objects directly (Shopify API sometimes returns these)
+      const status = error.status || 'Unknown';
+      const statusText = error.statusText || 'Unknown error';
+      errorMessage = `HTTP ${status}: ${statusText}`;
+      
+      // Try to read the response body
+      try {
+        const responseText = await error.text();
+        const responseBody = JSON.parse(responseText);
+        
+        if (responseBody.errors) {
+          errorMessage += ` - ${JSON.stringify(responseBody.errors)}`;
+          errorDetails = { responseErrors: responseBody.errors };
+        } else {
+          errorDetails = { responseBody };
+        }
+      } catch (parseError) {
+        errorDetails = { rawResponse: error };
+      }
+    } else if (typeof error === 'object' && error !== null) {
+      errorMessage = error.toString();
+      errorDetails = { errorObject: error };
+    } else {
+      errorMessage = String(error);
+    }
+
     logger.error("Checkout script API action failed", {
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
+      ...errorDetails,
       component: "checkoutScriptAPI"
     });
 
     return json({
       success: false,
-      error: error instanceof Error ? error.message : "Failed to perform action"
+      error: errorMessage
     }, { status: 500 });
   }
 }; 

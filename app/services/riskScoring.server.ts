@@ -468,7 +468,7 @@ export async function getRiskDistributionStats(shopDomain: string) {
         mediumRisk: total > 0 ? Math.round((mediumRisk / total) * 100) : 0,
         highRisk: total > 0 ? Math.round((highRisk / total) * 100) : 0,
       },
-      averageRiskScore: avgRiskScore._avg.riskScore || 0,
+      averageRiskScore: Number(avgRiskScore._avg.riskScore) || 0,
     };
   } catch (error) {
     logger.error("Error getting risk distribution stats", { shopDomain }, error instanceof Error ? error : new Error(String(error)));

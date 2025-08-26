@@ -198,8 +198,7 @@ async function processHistoricalOrder(order: any, shopDomain: string): Promise<v
       phone,
       email,
       address: address || undefined,
-      shopDomain,
-    });
+    }, shopDomain);
 
     // Record the order creation event
     await recordOrderEvent(

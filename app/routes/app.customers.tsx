@@ -48,12 +48,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       id: customer.id,
       phoneHash: customer.phoneHash.substring(0, 8) + "...",
       emailHash: customer.emailHash ? customer.emailHash.substring(0, 8) + "..." : "N/A",
-      riskScore: customer.riskScore,
+      riskScore: Number(customer.riskScore) || 0,
       riskTier: customer.riskTier,
-      totalOrders: customer.totalOrders,
-      failedAttempts: customer.failedAttempts,
-      successfulDeliveries: customer.successfulDeliveries,
-      returnRate: customer.returnRate,
+      totalOrders: customer.totalOrders || 0,
+      failedAttempts: customer.failedAttempts || 0,
+      successfulDeliveries: customer.successfulDeliveries || 0,
+      returnRate: Number(customer.returnRate) || 0,
       lastEventAt: customer.lastEventAt,
       recentEvents: customer.orderEvents?.slice(0, 5).map((event: any) => ({
         eventType: event.eventType,
@@ -207,11 +207,11 @@ export default function HighRiskCustomers() {
     >
       {customer.riskTier.replace("_", " ")}
     </Badge>,
-    customer.riskScore.toFixed(1),
+    (customer.riskScore || 0).toFixed(1),
     customer.totalOrders,
     customer.failedAttempts,
     customer.successfulDeliveries,
-    customer.returnRate.toFixed(1) + "%",
+    (customer.returnRate || 0).toFixed(1) + "%",
     new Date(customer.lastEventAt).toLocaleDateString(),
     <ButtonGroup key={`actions-${customer.id}`}>
       <Button
@@ -426,7 +426,7 @@ export default function HighRiskCustomers() {
                           Risk Score
                         </Text>
                         <Text as="p" variant="headingLg">
-                          {selectedCustomer.riskScore.toFixed(1)}
+                          {(selectedCustomer.riskScore || 0).toFixed(1)}
                         </Text>
                       </BlockStack>
                     </Box>
@@ -464,7 +464,7 @@ export default function HighRiskCustomers() {
                       <strong>Successful Deliveries:</strong> {selectedCustomer.successfulDeliveries}
                     </Text>
                     <Text as="p" variant="bodyMd">
-                      <strong>Return Rate:</strong> {selectedCustomer.returnRate.toFixed(1)}%
+                      <strong>Return Rate:</strong> {(selectedCustomer.returnRate || 0).toFixed(1)}%
                     </Text>
                   </InlineStack>
                 </BlockStack>

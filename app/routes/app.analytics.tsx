@@ -36,7 +36,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? Math.round((riskStats.distribution.highRisk / totalCustomers) * 100) 
       : 0;
     
-    const avgRiskScore = riskStats.averageRiskScore || 0;
+    const avgRiskScore = Number(riskStats.averageRiskScore) || 0;
 
     return json({
       success: true,
@@ -154,7 +154,7 @@ export default function Analytics() {
                         Avg Risk Score
                       </Text>
                       <Text as="p" variant="headingLg">
-                        {analytics.avgRiskScore.toFixed(1)}
+                        {(analytics.avgRiskScore || 0).toFixed(1)}
                       </Text>
                     </BlockStack>
                   </Box>
@@ -306,7 +306,7 @@ export default function Analytics() {
                           Elevated Average Risk Score
                         </Text>
                         <Text as="p" variant="bodyMd">
-                          Your average risk score ({analytics.avgRiskScore.toFixed(1)}) suggests increased COD risk. 
+                          Your average risk score ({(analytics.avgRiskScore || 0).toFixed(1)}) suggests increased COD risk. 
                           Review recent order patterns and consider enhanced customer verification.
                         </Text>
                       </BlockStack>

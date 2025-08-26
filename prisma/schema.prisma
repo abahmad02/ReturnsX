@@ -80,6 +80,7 @@ model OrderEvent {
   @@index([shopDomain])
   @@index([shopifyOrderId])
   @@index([eventType])
+  @@unique([shopifyOrderId, eventType, shopDomain, customerProfileId], name: "unique_order_event")
   @@map("order_events")
 }
 

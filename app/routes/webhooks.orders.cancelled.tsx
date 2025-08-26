@@ -77,8 +77,7 @@ export async function action({ request }: ActionFunctionArgs) {
         phone,
         email,
         address: address || undefined,
-        shopDomain: shop || "unknown",
-      });
+      }, shop || "unknown");
 
       // Record the order cancellation event
       await recordOrderEvent(
