@@ -280,7 +280,9 @@ async function processHistoricalOrder(order: any, shopDomain: string): Promise<v
     }
 
   } catch (error) {
-    throw new Error(`Failed to process order ${shopifyOrderId}: ${error}`);
+    // Log the specific error for debugging
+    console.error(`Error processing historical order ${shopifyOrderId}:`, error);
+    throw new Error(`Failed to process order ${shopifyOrderId}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

@@ -103,26 +103,70 @@ export async function getOrCreateCustomerProfile(
       throw new Error("Phone number is required for new customer profiles");
     }
 
-    const newProfile = await (prisma as any).customerProfile.create({
-      data: {
-        phoneHash: hashedIdentifiers.phoneHash,
-        emailHash: hashedIdentifiers.emailHash,
-        addressHash: hashedIdentifiers.addressHash,
-        // Ensure default values are explicitly set
-        riskScore: 0.0,
-        returnRate: 0.0,
-        riskTier: "ZERO_RISK",
-      },
-    });
+    try {
+      const newProfile = await (prisma as any).customerProfile.create({
+        data: {
+          phoneHash: hashedIdentifiers.phoneHash,
+          emailHash: hashedIdentifiers.emailHash,
+          addressHash: hashedIdentifiers.addressHash,
+          // Ensure default values are explicitly set
+          riskScore: 0.0,
+          returnRate: 0.0,
+          riskTier: "ZERO_RISK",
+        },
+      });
 
-    logger.customerProfileCreated(
-      newProfile.id,
-      shopDomain || "unknown",
-      newProfile.riskTier
-    );
+      logger.customerProfileCreated(
+        newProfile.id,
+        shopDomain || "unknown",
+        newProfile.riskTier
+      );
 
-    timer.finish({ action: "created_new", customerId: newProfile.id });
-    return newProfile;
+      timer.finish({ action: "created_new", customerId: newProfile.id });
+      return newProfile;
+
+    } catch (createError: any) {
+      // Handle unique constraint violation (race condition)
+      if (createError?.code === 'P2002' && createError?.meta?.target?.includes('phone_hash')) {
+        // Another process created the profile, try to find it again
+        const existingProfile = await (prisma as any).customerProfile.findUnique({
+          where: { phoneHash: hashedIdentifiers.phoneHash },
+          include: {
+            orderEvents: {
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+            },
+          },
+        });
+
+        if (existingProfile) {
+          // Update email and address hashes if provided and not already set
+          const updateData: any = {};
+          if (hashedIdentifiers.emailHash && !existingProfile.emailHash) {
+            updateData.emailHash = hashedIdentifiers.emailHash;
+          }
+          if (hashedIdentifiers.addressHash && !existingProfile.addressHash) {
+            updateData.addressHash = hashedIdentifiers.addressHash;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            const updated = await (prisma as any).customerProfile.update({
+              where: { id: existingProfile.id },
+              data: updateData,
+            });
+            
+            timer.finish({ action: "found_after_race_condition", customerId: updated.id });
+            return updated;
+          }
+
+          timer.finish({ action: "found_after_race_condition", customerId: existingProfile.id });
+          return existingProfile;
+        }
+      }
+      
+      // Re-throw if it's a different error
+      throw createError;
+    }
 
   } catch (error) {
     timer.finishWithError(
