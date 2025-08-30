@@ -430,14 +430,9 @@ export function rotateEncryptionKeys(): string {
 }
 
 /**
- * Hash sensitive data with salt (one-way)
+ * Hash sensitive data with salt (one-way) - DEPRECATED
+ * This function has been removed as we now store raw customer data
  */
-export function hashSensitiveData(data: string, customSalt?: string): string {
-  const salt = customSalt || process.env.RETURNSX_HASH_SALT || 'default-salt';
-  const hash = crypto.createHash('sha256');
-  hash.update(`${salt}:${data}`);
-  return hash.digest('hex');
-}
 
 /**
  * Generate cryptographically secure random values

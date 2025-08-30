@@ -46,8 +46,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Format customer data for display
     const formattedCustomers = highRiskCustomers.map((customer: any) => ({
       id: customer.id,
-      phoneHash: customer.phoneHash.substring(0, 8) + "...",
-      emailHash: customer.emailHash ? customer.emailHash.substring(0, 8) + "..." : "N/A",
+      phone: customer.phone || 'N/A',
+      email: customer.email || 'N/A',
       riskScore: Number(customer.riskScore) || 0,
       riskTier: customer.riskTier,
       totalOrders: customer.totalOrders || 0,
@@ -199,8 +199,8 @@ export default function HighRiskCustomers() {
 
   // Customer table data with WhatsApp actions
   const customerTableRows = customers.map((customer: any) => [
-    customer.phoneHash,
-    customer.emailHash,
+    customer.phone || 'N/A',
+    customer.email || 'N/A',
     <Badge 
       tone={customer.riskTier === "HIGH_RISK" ? "critical" : "attention"} 
       key={customer.id}
@@ -345,8 +345,8 @@ export default function HighRiskCustomers() {
                       'text',    // Actions
                     ]}
                     headings={[
-                      'Phone (Hashed)',
-                      'Email (Hashed)',
+                      'Phone',
+                      'Email',
                       'Risk Tier',
                       'Risk Score',
                       'Total Orders',
@@ -446,10 +446,10 @@ export default function HighRiskCustomers() {
                   
                   <InlineStack gap="400">
                     <Text as="p" variant="bodyMd">
-                      <strong>Phone:</strong> {selectedCustomer.phoneHash}
+                      <strong>Phone:</strong> {selectedCustomer.phone || 'N/A'}
                     </Text>
                     <Text as="p" variant="bodyMd">
-                      <strong>Email:</strong> {selectedCustomer.emailHash}
+                      <strong>Email:</strong> {selectedCustomer.email || 'N/A'}
                     </Text>
                   </InlineStack>
 

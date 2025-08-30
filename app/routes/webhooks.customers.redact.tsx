@@ -102,15 +102,15 @@ async function handleCustomerRedaction(payload: any, shopDomain: string) {
     // 2. Find matching customer profiles
     // 3. Delete all associated data
 
-    const emailHash = customer.email ? await hashCustomerIdentifier(customer.email, 'email') : null;
-    const phoneHash = customer.phone ? await hashCustomerIdentifier(customer.phone, 'phone') : null;
+    const normalizedEmail = customer.email ? normalizeCustomerIdentifier(customer.email, 'email') : null;
+    const normalizedPhone = customer.phone ? normalizeCustomerIdentifier(customer.phone, 'phone') : null;
 
     // Delete customer profiles
     const deletedProfiles = await db.customerProfile.deleteMany({
       where: {
         OR: [
-          ...(emailHash ? [{ emailHash }] : []),
-          ...(phoneHash ? [{ phoneHash }] : []),
+          ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+          ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
         ],
       },
     });
@@ -149,13 +149,10 @@ async function handleCustomerRedaction(payload: any, shopDomain: string) {
 /**
  * Hash customer identifier using the appropriate function
  */
-async function hashCustomerIdentifier(identifier: string, type: 'email' | 'phone'): Promise<string> {
-  // Import the crypto utility
-  const { hashEmail, hashPhoneNumber } = await import("../utils/crypto.server");
-  
+function normalizeCustomerIdentifier(identifier: string, type: 'email' | 'phone'): string {
   if (type === 'email') {
-    return hashEmail(identifier);
+    return identifier.toLowerCase().trim();
   } else {
-    return hashPhoneNumber(identifier);
+    return identifier.replace(/\D/g, ''); // Remove all non-digits for phone
   }
 }

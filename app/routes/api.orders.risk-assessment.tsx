@@ -2,8 +2,7 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 
 import { authenticate } from "../shopify.server";
-import { getCustomerProfileByPhoneHash } from "../services/customerProfile.server";
-import { hashPhoneNumber, hashEmail } from "../utils/crypto.server";
+import { getCustomerProfileByPhone } from "../services/customerProfile.server";
 import { calculateRiskScore } from "../services/riskScoring.server";
 import { logger } from "../services/logger.server";
 
@@ -23,12 +22,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }, { status: 400 });
     }
 
-    // Hash customer identifiers
-    const phoneHash = phone ? await hashPhoneNumber(phone) : null;
-    const emailHash = email ? await hashEmail(email) : null;
+    // Normalize phone number
+    const normalizedPhone = phone ? phone.replace(/\D/g, '') : null;
     
-    // Get customer profile
-    const customerProfile = await getCustomerProfileByPhoneHash(phoneHash || emailHash);
+    // Get customer profile by phone number
+    const customerProfile = await getCustomerProfileByPhone(normalizedPhone || '');
     
     if (!customerProfile) {
       return json({

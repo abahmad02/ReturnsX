@@ -136,7 +136,7 @@ export default function Dashboard() {
 
   // Recent customers table data
   const customerTableRows = highRiskCustomers.map((customer: any) => [
-    customer.phoneHash,
+    customer.phone || 'N/A',
     <Badge tone={customer.riskTier === "HIGH_RISK" ? "critical" : "attention"} key={customer.id}>
       {customer.riskTier.replace("_", " ")}
     </Badge>,
@@ -391,7 +391,7 @@ export default function Dashboard() {
                       'text',
                     ]}
                     headings={[
-                      'Customer (Hashed)',
+                      'Phone',
                       'Risk Tier',
                       'Risk Score', 
                       'Total Orders',

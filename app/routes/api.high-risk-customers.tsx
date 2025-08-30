@@ -24,7 +24,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Format customer data for dashboard display
     const formattedCustomers = highRiskCustomers.map((customer: any) => ({
       id: customer.id,
-      phoneHash: customer.phoneHash.substring(0, 8) + "...", // Partial hash for privacy
+      phone: customer.phone ? customer.phone.substring(0, 3) + "***" : "N/A", // Partial phone for privacy
+      email: customer.email || "N/A",
       riskScore: customer.riskScore,
       riskTier: customer.riskTier,
       totalOrders: customer.totalOrders,

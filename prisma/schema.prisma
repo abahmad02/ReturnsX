@@ -35,9 +35,9 @@ model Session {
 
 model CustomerProfile {
   id                    String         @id @default(cuid())
-  phoneHash             String         @unique @map("phone_hash") @db.VarChar(255)
-  emailHash             String?        @map("email_hash") @db.VarChar(255)
-  addressHash           String?        @map("address_hash") @db.VarChar(255)
+  phone                 String         @unique @map("phone") @db.VarChar(50)
+  email                 String?        @map("email") @db.VarChar(255)
+  address               String?        @map("address") @db.Text
   totalOrders           Int            @default(0) @map("total_orders")
   failedAttempts        Int            @default(0) @map("failed_attempts")
   successfulDeliveries  Int            @default(0) @map("successful_deliveries")
@@ -52,9 +52,9 @@ model CustomerProfile {
   orderEvents           OrderEvent[]
   manualOverrides       ManualOverride[]
 
-  @@index([phoneHash])
-  @@index([emailHash])
-  @@index([addressHash])
+  @@index([phone])
+  @@index([email])
+  @@index([address])
   @@index([riskTier])
   @@map("customer_profiles")
 }

@@ -4,7 +4,7 @@ import { json } from "@remix-run/node";
 import { authenticateWithRoles, Permission, hasPermission } from "../middleware/roleBasedAccess.server";
 import { withRateLimit } from "../middleware/rateLimiting.server";
 import { auditCustomerProfileAccess, auditAPIRequest } from "../services/auditLog.server";
-import { getCustomerProfileByPhoneHash, updateCustomerProfile } from "../services/customerProfile.server";
+import { getCustomerProfileByPhone, updateCustomerProfile } from "../services/customerProfile.server";
 import { calculateRiskScore } from "../services/riskScoring.server";
 import { getRiskConfig } from "../services/riskScoring.server";
 import { logger } from "../services/logger.server";
@@ -31,22 +31,24 @@ export const loader = withRateLimit("customerProfile")(
         );
         
         return json(
-          { success: false, error: "Insufficient permissions to access customer API" },
+          { success: false, error: "Insufficient permissions" },
           { status: 403 }
         );
       }
 
-      const { phoneHash } = params;
-      
-      if (!phoneHash) {
+      const { phone } = params;
+      if (!phone) {
         return json(
-          { success: false, error: "Phone hash parameter is required" },
+          { success: false, error: "Phone number is required" },
           { status: 400 }
         );
       }
 
+      // Normalize phone number
+      const normalizedPhone = phone.replace(/\D/g, '');
+
       // Get customer profile
-      const customerProfile = await getCustomerProfileByPhoneHash(phoneHash);
+      const customerProfile = await getCustomerProfileByPhone(normalizedPhone);
       
       if (!customerProfile) {
         await auditAPIRequest(
@@ -67,59 +69,38 @@ export const loader = withRateLimit("customerProfile")(
         );
       }
 
-      // Audit customer profile access
-      await auditCustomerProfileAccess(
-        customerProfile.id,
-        "PROFILE_VIEWED",
-        userSession.shopDomain,
-        userSession.userId,
-        userSession.role,
-        { 
-          requestSource: "API",
-          phoneHash: phoneHash.substring(0, 8) + "...",
-          riskTier: customerProfile.riskTier
-        }
-      );
-
-      // Calculate current risk score
-      const riskCalculation = await calculateRiskScore(customerProfile, session.shop, {});
+      // Get risk configuration for the shop
+      const riskConfig = await getRiskConfig(userSession.shopDomain);
       
-      // Get risk configuration for additional context
-      const riskConfig = await getRiskConfig(session.shop);
+      // Calculate current risk assessment
+      const riskCalculation = await calculateRiskScore(customerProfile, userSession.shopDomain, riskConfig);
 
-      // Filter response data based on user role
+      // Base response data
       const responseData = {
         success: true,
         customerProfile: {
           id: customerProfile.id,
-          riskTier: riskCalculation.riskTier,
-          riskScore: riskCalculation.riskScore,
-          confidence: riskCalculation.confidence,
-          recommendation: riskCalculation.recommendation,
+          phone: customerProfile.phone,
+          email: customerProfile.email,
+          address: customerProfile.address,
           totalOrders: customerProfile.totalOrders,
           failedAttempts: customerProfile.failedAttempts,
           successfulDeliveries: customerProfile.successfulDeliveries,
-          returnRate: customerProfile.returnRate,
+          returnRate: Number(customerProfile.returnRate),
+          riskScore: Number(customerProfile.riskScore),
+          riskTier: customerProfile.riskTier,
           lastEventAt: customerProfile.lastEventAt,
           createdAt: customerProfile.createdAt,
-          updatedAt: customerProfile.updatedAt
-        },
-        riskConfig: {
-          zeroRiskMaxFailed: riskConfig.zeroRiskMaxFailed,
-          zeroRiskMaxReturnRate: riskConfig.zeroRiskMaxReturnRate,
-          mediumRiskMaxFailed: riskConfig.mediumRiskMaxFailed,
-          mediumRiskMaxReturnRate: riskConfig.mediumRiskMaxReturnRate,
-          highRiskThreshold: riskConfig.highRiskThreshold,
-          enableCodRestriction: riskConfig.enableCodRestriction
+          updatedAt: customerProfile.updatedAt,
+          currentRiskAssessment: riskCalculation,
+          riskConfiguration: {
+            zeroRiskThreshold: riskConfig.zeroRiskMaxFailed,
+            mediumRiskThreshold: riskConfig.mediumRiskMaxFailed,
+            highRiskThreshold: riskConfig.highRiskThreshold,
+            enableCodRestriction: riskConfig.enableCodRestriction
+          }
         }
       };
-
-      // Add additional fields based on permissions
-      if (hasPermission(userSession, Permission.MANAGE_CUSTOMERS)) {
-        (responseData.customerProfile as any).phoneHash = customerProfile.phoneHash;
-        (responseData.customerProfile as any).emailHash = customerProfile.emailHash;
-        (responseData.customerProfile as any).addressHash = customerProfile.addressHash;
-      }
 
       await auditAPIRequest(
         new URL(request.url).pathname,
@@ -135,7 +116,7 @@ export const loader = withRateLimit("customerProfile")(
 
       logger.info("Customer profile API access", {
         component: "customerProfileAPI",
-        phoneHash: phoneHash.substring(0, 8) + "...",
+        phone: phone.substring(0, 3) + "***",
         riskTier: customerProfile.riskTier,
         userId: userSession.userId,
         userRole: userSession.role,
@@ -151,7 +132,7 @@ export const loader = withRateLimit("customerProfile")(
       logger.error("Customer profile API error", {
         component: "customerProfileAPI",
         error: errorMessage,
-        phoneHash: params.phoneHash?.substring(0, 8) + "...",
+        phone: params.phone?.substring(0, 3) + "***",
         responseTime: Date.now() - startTime
       });
 
@@ -190,19 +171,21 @@ export const action = withRateLimit("customerProfile")(
         );
       }
 
-      const { phoneHash } = params;
-      
-      if (!phoneHash) {
+      const { phone } = params;
+      if (!phone) {
         return json(
-          { success: false, error: "Phone hash parameter is required" },
+          { success: false, error: "Phone number is required" },
           { status: 400 }
         );
       }
 
-      // Get existing customer profile
-      const existingProfile = await getCustomerProfileByPhoneHash(phoneHash);
+      // Normalize phone number
+      const normalizedPhone = phone.replace(/\D/g, '');
       
-      if (!existingProfile) {
+      // Get customer profile
+      const customerProfile = await getCustomerProfileByPhone(normalizedPhone);
+      
+      if (!customerProfile) {
         return json(
           { success: false, error: "Customer profile not found" },
           { status: 404 }
@@ -210,94 +193,106 @@ export const action = withRateLimit("customerProfile")(
       }
 
       const formData = await request.formData();
-      const updateType = formData.get("updateType") as string;
-      
-      let updateData: any = {};
-      let auditDetails: any = { updateType };
+      const action = formData.get("action") as string;
 
-      switch (updateType) {
-        case "recalculate_risk":
-          // Trigger risk score recalculation
-          const riskCalculation = await calculateRiskScore(existingProfile, session.shop, {});
+      switch (action) {
+        case "resetFailedAttempts": {
+          const reason = formData.get("reason") as string;
           
-          updateData = {
-            riskScore: riskCalculation.riskScore,
-            riskTier: riskCalculation.riskTier
-          };
-          
-          auditDetails.riskRecalculation = {
-            previousScore: existingProfile.riskScore,
-            newScore: riskCalculation.riskScore,
-            previousTier: existingProfile.riskTier,
-            newTier: riskCalculation.riskTier
-          };
-          break;
+          const updatedProfile = await updateCustomerProfile(customerProfile.id, {
+            failedAttempts: 0,
+          });
+
+          await auditCustomerProfileAccess(
+            customerProfile.id,
+            "MANUAL_OVERRIDE_APPLIED",
+            userSession.shopDomain,
+            userSession.userId,
+            { 
+              action: "resetFailedAttempts", 
+              reason,
+              previousValue: customerProfile.failedAttempts,
+              newValue: 0
+            }
+          );
+
+          logger.info("Customer failed attempts reset", {
+            component: "customerProfileAPI",
+            customerId: customerProfile.id,
+            phone: phone.substring(0, 3) + "***",
+            previousFailedAttempts: customerProfile.failedAttempts,
+            reason,
+            adminUserId: userSession.userId,
+            shopDomain: userSession.shopDomain
+          });
+
+          return json({
+            success: true,
+            message: "Failed attempts reset successfully",
+            customerProfile: updatedProfile
+          });
+        }
+
+        case "changeRiskTier": {
+          const newRiskTier = formData.get("riskTier") as string;
+          const reason = formData.get("reason") as string;
+
+          if (!["ZERO_RISK", "MEDIUM_RISK", "HIGH_RISK"].includes(newRiskTier)) {
+            return json(
+              { success: false, error: "Invalid risk tier" },
+              { status: 400 }
+            );
+          }
+
+          const updatedProfile = await updateCustomerProfile(customerProfile.id, {
+            riskTier: newRiskTier,
+          });
+
+          await auditCustomerProfileAccess(
+            customerProfile.id,
+            "RISK_TIER_CHANGED",
+            userSession.shopDomain,
+            userSession.userId,
+            { 
+              action: "changeRiskTier", 
+              reason,
+              previousValue: customerProfile.riskTier,
+              newValue: newRiskTier
+            }
+          );
+
+          logger.info("Customer risk tier changed", {
+            component: "customerProfileAPI",
+            customerId: customerProfile.id,
+            phone: phone.substring(0, 3) + "***",
+            previousRiskTier: customerProfile.riskTier,
+            newRiskTier,
+            reason,
+            adminUserId: userSession.userId,
+            shopDomain: userSession.shopDomain
+          });
+
+          return json({
+            success: true,
+            message: "Risk tier updated successfully",
+            customerProfile: updatedProfile
+          });
+        }
 
         default:
           return json(
-            { success: false, error: "Invalid update type" },
+            { success: false, error: "Invalid action" },
             { status: 400 }
           );
       }
 
-      // Update customer profile
-      const updatedProfile = await updateCustomerProfile(existingProfile.id, updateData);
-
-      // Audit the update
-      await auditCustomerProfileAccess(
-        existingProfile.id,
-        "PROFILE_UPDATED",
-        userSession.shopDomain,
-        userSession.userId,
-        userSession.role,
-        auditDetails
-      );
-
-      await auditAPIRequest(
-        new URL(request.url).pathname,
-        request.method,
-        userSession.shopDomain,
-        userSession.userId,
-        userSession.role,
-        (request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip")) || undefined,
-        request.headers.get("user-agent") || undefined,
-        200,
-        Date.now() - startTime
-      );
-
-      logger.info("Customer profile updated via API", {
-        component: "customerProfileAPI",
-        customerId: existingProfile.id,
-        updateType,
-        userId: userSession.userId,
-        userRole: userSession.role,
-        shopDomain: userSession.shopDomain,
-        responseTime: Date.now() - startTime
-      });
-
-      return json({
-        success: true,
-        message: "Customer profile updated successfully",
-        customerProfile: {
-          id: updatedProfile.id,
-          riskTier: updatedProfile.riskTier,
-          riskScore: updatedProfile.riskScore,
-          totalOrders: updatedProfile.totalOrders,
-          failedAttempts: updatedProfile.failedAttempts,
-          successfulDeliveries: updatedProfile.successfulDeliveries,
-          returnRate: updatedProfile.returnRate,
-          lastEventAt: updatedProfile.lastEventAt,
-          updatedAt: updatedProfile.updatedAt
-        }
-      });
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       
-      logger.error("Customer profile API action error", {
+      logger.error("Customer profile action error", {
         component: "customerProfileAPI",
         error: errorMessage,
-        phoneHash: params.phoneHash?.substring(0, 8) + "...",
+        phone: params.phone?.substring(0, 3) + "***",
         responseTime: Date.now() - startTime
       });
 
@@ -307,4 +302,4 @@ export const action = withRateLimit("customerProfile")(
       );
     }
   }
-); 
+);

@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import db from "../db.server";
-import { hashEmail, hashPhoneNumber } from "../utils/crypto.server";
+// Removed crypto import - using raw phone numbers now
 import { logger } from "../services/logger.server";
 
 /**
@@ -274,19 +274,18 @@ async function clearTestData(shopDomain: string) {
 
 async function getTestDataStatus(shopDomain: string) {
   try {
-    // Get test profiles by phone hashes
-    const testPhones = TEST_CUSTOMERS.map(c => hashPhoneNumber(c.phone));
-    const resolvedHashes = await Promise.all(testPhones);
+    // Get test profiles by phone numbers (normalized)
+    const testPhones = TEST_CUSTOMERS.map(c => c.phone.replace(/\D/g, ''));
     
     const testProfiles = await db.customerProfile.findMany({
       where: {
-        phoneHash: {
-          in: resolvedHashes
+        phone: {
+          in: testPhones
         }
       },
       select: {
-        phoneHash: true,
-        emailHash: true,
+        phone: true,
+        email: true,
         riskTier: true,
         riskScore: true,
         totalOrders: true,
