@@ -334,6 +334,113 @@ export async function recordOrderEvent(
 }
 
 /**
+ * Get high-risk customers for a shop
+ */
+export async function getHighRiskCustomers(shopDomain: string, limit: number = 50): Promise<CustomerProfile[]> {
+  try {
+    return await (prisma as any).customerProfile.findMany({
+      where: {
+        AND: [
+          { riskTier: "HIGH_RISK" },
+          {
+            orderEvents: {
+              some: {
+                shopDomain: shopDomain,
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        orderEvents: {
+          where: { shopDomain },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+      orderBy: [
+        { riskScore: 'desc' },
+        { lastEventAt: 'desc' },
+      ],
+      take: limit,
+    });
+  } catch (error) {
+    logger.error("Error fetching high-risk customers", {
+      shopDomain,
+      limit,
+    }, error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  }
+}
+
+/**
+ * Apply manual override to customer profile
+ */
+export async function applyManualOverride(
+  customerProfileId: string,
+  shopDomain: string,
+  overrideType: string,
+  newValue: string,
+  adminUserId: string,
+  reason?: string
+): Promise<CustomerProfile> {
+  try {
+    const updateData: any = {};
+
+    switch (overrideType) {
+      case "RESET_FAILED_ATTEMPTS":
+        updateData.failedAttempts = 0;
+        break;
+      
+      case "CHANGE_RISK_TIER":
+        if (!["ZERO_RISK", "MEDIUM_RISK", "HIGH_RISK"].includes(newValue)) {
+          throw new Error("Invalid risk tier value");
+        }
+        updateData.riskTier = newValue;
+        break;
+      
+      case "FORGIVE_CUSTOMER":
+        updateData.failedAttempts = 0;
+        updateData.riskTier = "ZERO_RISK";
+        updateData.riskScore = 0.0;
+        break;
+      
+      default:
+        throw new Error("Invalid override type");
+    }
+
+    // Update the customer profile
+    const updatedProfile = await (prisma as any).customerProfile.update({
+      where: { id: customerProfileId },
+      data: updateData,
+      include: {
+        orderEvents: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+      },
+    });
+
+    // Recalculate risk if needed (except for manual tier changes)
+    if (overrideType !== "CHANGE_RISK_TIER") {
+      return await updateCustomerProfileRisk(customerProfileId, shopDomain);
+    }
+
+    return updatedProfile;
+
+  } catch (error) {
+    logger.error("Error applying manual override", {
+      customerProfileId,
+      shopDomain,
+      overrideType,
+      adminUserId,
+      reason,
+    }, error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  }
+}
+
+/**
  * Update risk configuration for a shop
  */
 export async function updateRiskConfig(shopDomain: string, configData: any) {
