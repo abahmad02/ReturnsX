@@ -21,6 +21,11 @@ export const RETURNSX_WEBHOOKS: WebhookConfig[] = [
     format: "json"
   },
   {
+    topic: "orders/paid",
+    endpoint: "/webhooks/orders/paid",
+    format: "json"
+  },
+  {
     topic: "orders/updated", 
     endpoint: "/webhooks/orders/updated",
     format: "json"

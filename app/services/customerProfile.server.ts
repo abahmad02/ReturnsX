@@ -306,6 +306,10 @@ export async function recordOrderEvent(
           }
           break;
         
+        case "ORDER_PAID":
+          // Mark orders as paid - positive indicator for delivery likelihood
+          break;
+        
         case "ORDER_CANCELLED":
           // Consider cancelled orders as failed attempts if due to customer refusal
           if (event.cancelReason && 
@@ -320,8 +324,16 @@ export async function recordOrderEvent(
           break;
         
         case "ORDER_REFUNDED":
-          // Refunds count as failed attempts for COD risk assessment
+        case "ORDER_RETURN_INITIATED":
+          // Refunds and returns count as failed attempts for COD risk assessment
           failedAttempts++;
+          break;
+        
+        case "ORDER_UPDATED":
+          // General updates - no specific action unless return-related
+          if (event.eventData?.is_return_related) {
+            failedAttempts++;
+          }
           break;
       }
     }
