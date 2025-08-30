@@ -1,7 +1,7 @@
-import { prisma } from "../db.server";
+import prisma from "../db.server";
 import { updateCustomerProfileRisk } from "./riskScoring.server";
 import { PerformanceTimer } from "./logger.server";
-import { auditCustomerAction } from "./auditLog.server";
+
 import { logger } from "./logger.server";
 
 // Temporary types until Prisma client includes our models
