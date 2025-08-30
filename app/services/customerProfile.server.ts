@@ -441,6 +441,49 @@ export async function applyManualOverride(
 }
 
 /**
+ * Get customer profile statistics for analytics
+ */
+export async function getCustomerProfileStats(shopDomain: string) {
+  try {
+    // Get recent events count (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentEventsCount = await (prisma as any).orderEvent.count({
+      where: {
+        shopDomain,
+        createdAt: {
+          gte: thirtyDaysAgo,
+        },
+      },
+    });
+
+    // Get total active customers for this shop
+    const activeCustomersCount = await (prisma as any).customerProfile.count({
+      where: {
+        orderEvents: {
+          some: {
+            shopDomain,
+          },
+        },
+      },
+    });
+
+    return {
+      recentEvents: recentEventsCount,
+      activeCustomers: activeCustomersCount,
+      lastCalculated: new Date().toISOString(),
+    };
+
+  } catch (error) {
+    logger.error("Error getting customer profile stats", {
+      shopDomain,
+    }, error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  }
+}
+
+/**
  * Update risk configuration for a shop
  */
 export async function updateRiskConfig(shopDomain: string, configData: any) {
