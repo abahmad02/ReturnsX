@@ -10,8 +10,7 @@ import {
   formatWhatsAppNumber
 } from "../services/whatsapp.server";
 import { logger } from "../services/logger.server";
-import { getCustomerProfileByPhoneHash } from "../services/customerProfile.server";
-import { hashPhoneNumber } from "../utils/crypto.server";
+import { getCustomerProfileByPhone } from "../services/customerProfile.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
@@ -43,10 +42,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Extract phone number and normalize it
     const customerPhone = incomingMessage.from.replace('whatsapp:', '');
-    const phoneHash = await hashPhoneNumber(customerPhone);
+    const normalizedPhone = customerPhone.replace(/\D/g, '');
     
     // Get customer profile to understand context
-    const customerProfile = await getCustomerProfileByPhoneHash(phoneHash);
+    const customerProfile = await getCustomerProfileByPhone(normalizedPhone);
     
     // Process the message and generate response
     let responseMessage = processIncomingMessage(incomingMessage);
@@ -105,7 +104,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!whatsappResponse.success) {
       logger.error("Failed to send WhatsApp response", {
         component: "whatsappWebhook",
-        customerPhone,
+        customerPhone: customerPhone.substring(0, 3) + "***",
         error: whatsappResponse.error
       });
     }
@@ -113,7 +112,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Log the interaction for merchant dashboard
     logger.info("WhatsApp interaction processed", {
       component: "whatsappWebhook",
-      customerPhone,
+      customerPhone: customerPhone.substring(0, 3) + "***",
       incomingMessage: incomingMessage.body,
       responseMessage: responseMessage.substring(0, 100) + "...",
       messageId: whatsappResponse.messageId
