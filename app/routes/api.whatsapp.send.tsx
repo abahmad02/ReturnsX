@@ -10,8 +10,7 @@ import {
   isWhatsAppAvailable 
 } from "../services/whatsapp.server";
 import { logger } from "../services/logger.server";
-import { getCustomerProfileByPhoneHash } from "../services/customerProfile.server";
-import { hashPhoneNumber } from "../utils/crypto.server";
+import { getCustomerProfileByPhone } from "../services/customerProfile.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
@@ -149,8 +148,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       // Get customer profile for additional context
       try {
-        const phoneHash = await hashPhoneNumber(customerPhone);
-        const customerProfile = await getCustomerProfileByPhoneHash(phoneHash);
+        const normalizedPhone = customerPhone.replace(/\D/g, '');
+        const customerProfile = await getCustomerProfileByPhone(normalizedPhone);
         
         if (customerProfile) {
           logger.info("Message sent to tracked customer", {
@@ -164,7 +163,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         // Non-critical error, don't fail the main operation
         logger.warn("Could not retrieve customer profile for message logging", {
           component: "whatsappAPI",
-          customerPhone,
+          customerPhone: customerPhone.substring(0, 3) + "***",
           error: error instanceof Error ? error.message : String(error)
         });
       }
