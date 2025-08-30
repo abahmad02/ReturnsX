@@ -49,7 +49,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       stats,
       highRiskCustomers: highRiskCustomers.map((customer: any) => ({
         id: customer.id,
-        phoneHash: customer.phoneHash.substring(0, 8) + "...",
+        phone: customer.phone ? customer.phone.substring(0, 3) + "***" : "N/A",
         riskScore: Number(customer.riskScore),
         riskTier: customer.riskTier,
         totalOrders: customer.totalOrders,
@@ -177,7 +177,7 @@ export default function Dashboard() {
                       <InlineStack gap="200" align="center">
                         <Icon source={PersonIcon} tone="base" />
                         <Text as="h3" variant="headingMd">
-                          {stats.total.toLocaleString()}
+                          {(stats.total || 0).toLocaleString()}
                         </Text>
                       </InlineStack>
                       <Text as="p" variant="bodyMd" tone="subdued">

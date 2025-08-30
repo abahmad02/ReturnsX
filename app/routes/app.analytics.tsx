@@ -134,7 +134,7 @@ export default function Analytics() {
                         Total Customers
                       </Text>
                       <Text as="p" variant="headingLg">
-                        {analytics.totalCustomers.toLocaleString()}
+                        {(analytics.totalCustomers || 0).toLocaleString()}
                       </Text>
                     </BlockStack>
                   </Box>
