@@ -14,8 +14,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    // Get the app URL from environment or request
-    const appUrl = process.env.SHOPIFY_APP_URL || `${new URL(request.url).protocol}//${new URL(request.url).host}`;
+    // Get the app URL from environment or use production URL as fallback
+    const appUrl = process.env.SHOPIFY_APP_URL || "https://returnsx.pk";
 
     console.log("Registering webhooks with app URL:", appUrl);
 
