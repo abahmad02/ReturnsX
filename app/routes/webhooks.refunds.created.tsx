@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { getOrCreateCustomerProfile, recordOrderEvent } from "../services/customerProfile.server";
 import { verifyWebhookSignature } from "../services/webhookRegistration.server";
+import prisma from "../db.server";
 
 /**
  * Webhook handler for refunds/create
@@ -54,20 +55,42 @@ export async function action({ request }: ActionFunctionArgs) {
       reason
     });
 
-    // We need to fetch the original order to get customer information
-    // For now, we'll use the order_id to link to existing customer profiles
+    // Find existing order events for this Shopify order to get customer profile
     try {
-      // Since we don't have direct customer info in refund webhook,
-      // we'll create a simplified refund event that can be linked to
-      // existing customer profiles when we have the order information
-      
-      // This is a placeholder approach - in production, you might want to:
-      // 1. Fetch the original order using Shopify Admin API
-      // 2. Or link refunds to existing order events in the database
-      
-      console.log(`✓ Refund tracked: ${refundId} for order ${shopifyOrderId} (amount: ${amount} ${currency})`);
-      
-      // TODO: Implement proper refund tracking once we have order lookup functionality
+      const existingOrderEvent = await (prisma as any).orderEvent.findFirst({
+        where: {
+          shopifyOrderId: shopifyOrderId.toString(),
+          shopDomain: shop || "unknown",
+        },
+        include: {
+          customerProfile: true,
+        },
+      });
+
+      if (existingOrderEvent) {
+        // Record the refund event for the customer profile
+        await recordOrderEvent(
+          existingOrderEvent.customerProfile,
+          {
+            shopifyOrderId: shopifyOrderId.toString(),
+            eventType: "ORDER_REFUNDED",
+            orderValue: parseFloat(amount || "0"),
+            currency,
+            refundAmount: parseFloat(amount || "0"),
+            eventData: {
+              refund_id: refundId,
+              reason,
+              note,
+              created_at,
+            },
+          },
+          shop || "unknown"
+        );
+
+        console.log(`✓ Refund tracked for customer profile: ${existingOrderEvent.customerProfile.id} (refund: ${refundId}, amount: ${amount} ${currency})`);
+      } else {
+        console.log(`No existing order event found for order ${shopifyOrderId}, cannot link refund to customer profile`);
+      }
       
     } catch (dbError) {
       console.error("Database error processing refund:", dbError);
