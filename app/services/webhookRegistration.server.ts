@@ -1,4 +1,5 @@
 import { authenticate } from "../shopify.server";
+import crypto from "crypto";
 
 /**
  * ReturnsX Webhook Registration Service
@@ -213,7 +214,6 @@ export function verifyWebhookSignature(
   secret: string
 ): boolean {
   try {
-    const crypto = require('crypto');
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(rawBody, 'utf8');
     const computedSignature = hmac.digest('base64');
