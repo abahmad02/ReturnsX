@@ -301,6 +301,16 @@ export default function Dashboard() {
                 </Text>
                 
                 <BlockStack gap="300">
+                  <Button 
+                    onClick={registerWebhooks}
+                    loading={webhookFetcher.state === "submitting"}
+                    variant="primary"
+                    tone="critical"
+                    fullWidth
+                  >
+                    🔗 Setup Webhooks
+                  </Button>
+                  
                   {scriptStatus.hasCheckoutScript ? (
                     <Button 
                       onClick={disableCheckoutEnforcement}
