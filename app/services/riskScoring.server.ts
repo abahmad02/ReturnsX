@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import { logger, PerformanceTimer } from "./logger.server";
+import { applyRiskTag } from "./customerTagging.server";
 
 /**
  * ReturnsX Advanced Risk Scoring Service
@@ -282,11 +283,12 @@ export async function calculateRiskScore(
 }
 
 /**
- * Update customer profile with new risk calculation
+ * Update customer profile with new risk calculation and apply Shopify tags
  */
 export async function updateCustomerProfileRisk(
   profileId: string,
-  shopDomain: string
+  shopDomain: string,
+  admin?: any // Shopify admin API instance for tagging
 ): Promise<any> {
   try {
     // Get current profile with recent order events
@@ -304,6 +306,8 @@ export async function updateCustomerProfileRisk(
       throw new Error("Customer profile not found");
     }
 
+    const previousRiskTier = profile.riskTier;
+
     // Calculate new risk assessment
     const riskResult = await calculateRiskScore(profile, profile.orderEvents, shopDomain);
 
@@ -318,10 +322,47 @@ export async function updateCustomerProfileRisk(
       },
     });
 
+    // Apply risk tag to Shopify customer if admin API is available and risk tier changed
+    if (admin && (previousRiskTier !== riskResult.riskTier)) {
+      try {
+        const tagResult = await applyRiskTag(
+          admin,
+          riskResult.riskTier,
+          {
+            phone: profile.phone,
+            email: profile.email,
+          },
+          shopDomain
+        );
+
+        if (tagResult.success) {
+          logger.info("Risk tag applied after profile update", {
+            profileId,
+            shopDomain,
+            previousRiskTier,
+            newRiskTier: riskResult.riskTier,
+            customerId: tagResult.customerId,
+          });
+        } else {
+          logger.warn("Failed to apply risk tag after profile update", {
+            profileId,
+            shopDomain,
+            error: tagResult.error,
+          });
+        }
+      } catch (tagError) {
+        // Don't fail the whole operation if tagging fails
+        logger.error("Error applying risk tag", {
+          profileId,
+          shopDomain,
+        }, tagError instanceof Error ? tagError : new Error(String(tagError)));
+      }
+    }
+
     logger.customerProfileUpdated(
       profileId,
       shopDomain,
-      profile.riskTier,
+      previousRiskTier,
       riskResult.riskTier
     );
 

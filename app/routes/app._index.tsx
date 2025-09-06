@@ -79,8 +79,10 @@ export default function Dashboard() {
   const webhookFetcher = useFetcher();
   const importFetcher = useFetcher();
   const scriptFetcher = useFetcher();
+  const tagFetcher = useFetcher();
   const shopify = useAppBridge();
   const [importProgress, setImportProgress] = useState<any>(null);
+  const [tagProgress, setTagProgress] = useState<any>(null);
 
   useEffect(() => {
     if (webhookFetcher.data && (webhookFetcher.data as any).success) {
@@ -97,7 +99,13 @@ export default function Dashboard() {
     } else if (scriptFetcher.data && !(scriptFetcher.data as any).success) {
       shopify.toast.show((scriptFetcher.data as any).error, { isError: true });
     }
-  }, [webhookFetcher.data, importFetcher.data, scriptFetcher.data, shopify]);
+    if (tagFetcher.data && (tagFetcher.data as any).success) {
+      shopify.toast.show("Customer tags applied successfully");
+      setTagProgress((tagFetcher.data as any));
+    } else if (tagFetcher.data && !(tagFetcher.data as any).success) {
+      shopify.toast.show((tagFetcher.data as any).error, { isError: true });
+    }
+  }, [webhookFetcher.data, importFetcher.data, scriptFetcher.data, tagFetcher.data, shopify]);
 
   const registerWebhooks = () => {
     webhookFetcher.submit({}, { method: "POST", action: "/api/webhooks/register" });
@@ -113,6 +121,10 @@ export default function Dashboard() {
 
   const disableCheckoutEnforcement = () => {
     scriptFetcher.submit({ action: "remove" }, { method: "POST", action: "/api/scripts/checkout" });
+  };
+
+  const applyRiskTags = () => {
+    tagFetcher.submit({ action: "apply_all_tags", limit: "100" }, { method: "POST", action: "/api/customer-tags/batch" });
   };
 
   if (!data.success) {
@@ -159,6 +171,23 @@ export default function Dashboard() {
       </TitleBar>
 
       <BlockStack gap="500">
+        {/* New Feature Banner */}
+        <Banner tone="success">
+          <BlockStack gap="200">
+            <Text variant="bodyMd" fontWeight="semibold">
+              🆕 New Feature: Automatic Risk Tags in Shopify Admin!
+            </Text>
+            <Text variant="bodyMd">
+              ReturnsX now automatically applies risk tags (🟢 Zero Risk, 🟡 Medium Risk, 🔴 High Risk) 
+              directly to your customers in Shopify admin. You can see risk levels right in your order list 
+              without opening the ReturnsX app!
+            </Text>
+            <Text variant="bodyMd" tone="subdued">
+              Use the "Apply Risk Tags to Customers" button below to tag all existing customers.
+            </Text>
+          </BlockStack>
+        </Banner>
+
         {/* Store Overview */}
         <Layout>
           <Layout.Section>
@@ -340,6 +369,16 @@ export default function Dashboard() {
                   </Button>
                   
                   <Button 
+                    onClick={applyRiskTags}
+                    loading={tagFetcher.state === "submitting"}
+                    variant="primary"
+                    tone="success"
+                    fullWidth
+                  >
+                    🏷️ Apply Risk Tags to Customers
+                  </Button>
+                  
+                  <Button 
                     url="/app/customers"
                     fullWidth
                   >
@@ -366,6 +405,29 @@ export default function Dashboard() {
                         </Text>
                         <Text variant="bodyMd">
                           Errors: {importProgress.errors?.length || 0}
+                        </Text>
+                      </BlockStack>
+                    </Banner>
+                  </Box>
+                )}
+
+                {tagProgress && (
+                  <Box paddingBlockStart="400">
+                    <Banner tone="success">
+                      <BlockStack gap="200">
+                        <Text variant="bodyMd" fontWeight="semibold">
+                          Risk Tagging Complete! 🏷️
+                        </Text>
+                        <Text variant="bodyMd">
+                          Successfully tagged: {tagProgress.successful}/{tagProgress.total} customers
+                        </Text>
+                        {tagProgress.failed > 0 && (
+                          <Text variant="bodyMd">
+                            Failed: {tagProgress.failed} customers
+                          </Text>
+                        )}
+                        <Text variant="bodyMd" tone="subdued">
+                          Check your Shopify admin to see risk tags on customer profiles!
                         </Text>
                       </BlockStack>
                     </Banner>

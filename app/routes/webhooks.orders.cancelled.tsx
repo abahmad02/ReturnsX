@@ -1,7 +1,9 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { authenticate } from "../shopify.server";
 import { getOrCreateCustomerProfile, recordOrderEvent } from "../services/customerProfile.server";
 import { verifyWebhookSignature } from "../services/webhookRegistration.server";
+import { updateCustomerProfileRisk } from "../services/riskScoring.server";
 
 /**
  * Webhook handler for orders/cancelled
@@ -97,7 +99,24 @@ export async function action({ request }: ActionFunctionArgs) {
         shop || "unknown"
       );
 
-      console.log(`✓ Order cancellation tracked for customer profile: ${customerProfile.id} (reason: ${cancel_reason})`);
+      // Update risk score and apply tags for cancellations (important for risk assessment)
+      try {
+        // Get admin API for tagging
+        const { admin } = await authenticate.admin(request);
+        
+        // Recalculate risk and apply tags
+        await updateCustomerProfileRisk(
+          customerProfile.id,
+          shop || "unknown",
+          admin
+        );
+        
+        console.log(`✓ Order cancellation tracked and risk tags updated for customer profile: ${customerProfile.id} (reason: ${cancel_reason})`);
+      } catch (adminError) {
+        console.log("Could not apply risk tags (admin API unavailable):", adminError);
+        console.log(`✓ Order cancellation tracked for customer profile: ${customerProfile.id} (reason: ${cancel_reason})`);
+      }
+      
     } catch (dbError) {
       console.error("Database error processing cancelled order:", dbError);
       // Don't fail the webhook for DB errors
