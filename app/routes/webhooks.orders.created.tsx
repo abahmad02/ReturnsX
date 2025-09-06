@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { getOrCreateCustomerProfile, recordOrderEvent } from "../services/customerProfile.server";
 import { verifyWebhookSignature } from "../services/webhookRegistration.server";
 import { updateCustomerProfileRisk } from "../services/riskScoring.server";
+import { applyDualRiskTags } from "../services/dualTagging.server";
 
 /**
  * Webhook handler for orders/create
@@ -97,19 +98,39 @@ export async function action({ request }: ActionFunctionArgs) {
         shop || "unknown"
       );
 
-      // Update risk score and apply tags
+      // Apply dual risk tags (customer + order) using GraphQL
       try {
         // Get admin API for tagging
         const { admin } = await authenticate.admin(request);
         
-        // Recalculate risk and apply tags
-        await updateCustomerProfileRisk(
-          customerProfile.id,
-          shop || "unknown",
-          admin
+        // Apply tags to both customer and order based on database risk score
+        const taggingResult = await applyDualRiskTags(
+          admin,
+          { phone, email },
+          shopifyOrderId.toString(),
+          shop || "unknown"
         );
         
-        console.log(`✓ Order creation tracked and risk tags updated for customer profile: ${customerProfile.id}`);
+        if (taggingResult.success) {
+          console.log(`✓ Dual risk tags applied successfully:`, {
+            customerProfileId: customerProfile.id,
+            orderId: shopifyOrderId,
+            customerTagged: taggingResult.customerTagged,
+            orderTagged: taggingResult.orderTagged,
+            appliedTag: taggingResult.appliedTag,
+            riskDetails: taggingResult.details
+          });
+        } else {
+          console.log(`⚠️ Dual risk tagging failed:`, taggingResult.error);
+        }
+        
+        // Also update the risk score in our database
+        await updateCustomerProfileRisk(
+          customerProfile.id,
+          shop || "unknown"
+        );
+        
+        console.log(`✓ Order creation tracked and risk tags applied for customer profile: ${customerProfile.id}`);
       } catch (adminError) {
         console.log("Could not apply risk tags (admin API unavailable):", adminError);
         console.log(`✓ Order creation tracked for customer profile: ${customerProfile.id}`);

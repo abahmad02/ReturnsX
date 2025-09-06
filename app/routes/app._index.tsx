@@ -127,6 +127,10 @@ export default function Dashboard() {
     tagFetcher.submit({ action: "apply_all_tags", limit: "100" }, { method: "POST", action: "/api/customer-tags/batch" });
   };
 
+  const applyDualRiskTags = () => {
+    tagFetcher.submit({ action: "apply_dual_tags", limit: "50" }, { method: "POST", action: "/api/customer-tags/batch" });
+  };
+
   if (!data.success) {
     return (
       <Page>
@@ -179,11 +183,11 @@ export default function Dashboard() {
             </Text>
             <Text variant="bodyMd">
               ReturnsX now automatically applies risk tags (🟢 Zero Risk, 🟡 Medium Risk, 🔴 High Risk) 
-              directly to your customers in Shopify admin. You can see risk levels right in your order list 
-              without opening the ReturnsX app!
+              to BOTH customers AND orders in Shopify admin using GraphQL. You can see risk levels right 
+              in your order list without opening the ReturnsX app!
             </Text>
             <Text variant="bodyMd" tone="subdued">
-              Use the "Apply Risk Tags to Customers" button below to tag all existing customers.
+              Use the "Dual Risk Tags" button below to tag both customers and recent orders based on database risk scores.
             </Text>
           </BlockStack>
         </Banner>
@@ -369,13 +373,21 @@ export default function Dashboard() {
                   </Button>
                   
                   <Button 
-                    onClick={applyRiskTags}
+                    onClick={applyDualRiskTags}
                     loading={tagFetcher.state === "submitting"}
                     variant="primary"
                     tone="success"
                     fullWidth
                   >
-                    🏷️ Apply Risk Tags to Customers
+                    🏷️ Apply Dual Risk Tags (Customers + Orders)
+                  </Button>
+                  
+                  <Button 
+                    onClick={applyRiskTags}
+                    loading={tagFetcher.state === "submitting"}
+                    fullWidth
+                  >
+                    🏷️ Apply Customer Tags Only (Legacy)
                   </Button>
                   
                   <Button 

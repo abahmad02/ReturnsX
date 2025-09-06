@@ -4,6 +4,7 @@ import { authenticate } from "../shopify.server";
 import { getOrCreateCustomerProfile, recordOrderEvent } from "../services/customerProfile.server";
 import { verifyWebhookSignature } from "../services/webhookRegistration.server";
 import { updateCustomerProfileRisk } from "../services/riskScoring.server";
+import { applyDualRiskTags } from "../services/dualTagging.server";
 
 /**
  * Webhook handler for orders/cancelled
@@ -99,17 +100,38 @@ export async function action({ request }: ActionFunctionArgs) {
         shop || "unknown"
       );
 
-      // Update risk score and apply tags for cancellations (important for risk assessment)
+      // Update risk score and apply dual tags for cancellations (important for risk assessment)
       try {
         // Get admin API for tagging
         const { admin } = await authenticate.admin(request);
         
-        // Recalculate risk and apply tags
+        // First update the risk score in database (cancellation affects risk)
         await updateCustomerProfileRisk(
           customerProfile.id,
-          shop || "unknown",
-          admin
+          shop || "unknown"
         );
+        
+        // Apply updated risk tags to both customer and order
+        const taggingResult = await applyDualRiskTags(
+          admin,
+          { phone, email },
+          shopifyOrderId.toString(),
+          shop || "unknown"
+        );
+        
+        if (taggingResult.success) {
+          console.log(`✓ Dual risk tags applied after cancellation:`, {
+            customerProfileId: customerProfile.id,
+            orderId: shopifyOrderId,
+            cancelReason: cancel_reason,
+            customerTagged: taggingResult.customerTagged,
+            orderTagged: taggingResult.orderTagged,
+            appliedTag: taggingResult.appliedTag,
+            riskDetails: taggingResult.details
+          });
+        } else {
+          console.log(`⚠️ Dual risk tagging failed after cancellation:`, taggingResult.error);
+        }
         
         console.log(`✓ Order cancellation tracked and risk tags updated for customer profile: ${customerProfile.id} (reason: ${cancel_reason})`);
       } catch (adminError) {

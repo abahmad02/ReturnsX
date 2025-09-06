@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { batchApplyRiskTags, getDefaultTaggingConfig } from "../services/customerTagging.server";
+import { batchApplyDualRiskTags, getDefaultDualTaggingConfig } from "../services/dualTagging.server";
 import { getHighRiskCustomers, getCustomerProfileStats } from "../services/customerProfile.server";
 
 /**
@@ -24,7 +25,7 @@ export async function action({ request }: ActionFunctionArgs) {
       // Get all customers with risk assessments
       const customers = await getHighRiskCustomers(session.shop, limit);
       
-      // Format for batch tagging
+      // Format for batch tagging (customers only - legacy method)
       const customerData = customers.map((customer: any) => ({
         riskTier: customer.riskTier,
         phone: customer.phone,
@@ -41,7 +42,7 @@ export async function action({ request }: ActionFunctionArgs) {
         });
       }
 
-      // Apply tags in batch
+      // Apply tags in batch (customers only)
       const result = await batchApplyRiskTags(
         admin,
         customerData,
@@ -51,10 +52,93 @@ export async function action({ request }: ActionFunctionArgs) {
 
       return json({
         success: true,
-        message: `Batch tagging completed: ${result.successful} successful, ${result.failed} failed`,
+        message: `Batch customer tagging completed: ${result.successful} successful, ${result.failed} failed`,
         successful: result.successful,
         failed: result.failed,
         total: customerData.length,
+        details: result.results.slice(0, 10), // First 10 results for debugging
+      });
+
+    } else if (action === "apply_dual_tags") {
+      // Get recent orders from Shopify to tag both customers and orders
+      const ordersResponse = await admin.graphql(
+        `#graphql
+          query getRecentOrders($first: Int!) {
+            orders(first: $first, reverse: true) {
+              edges {
+                node {
+                  id
+                  name
+                  customer {
+                    phone
+                    email
+                  }
+                  billingAddress {
+                    phone
+                  }
+                  shippingAddress {
+                    phone
+                  }
+                }
+              }
+            }
+          }`,
+        {
+          variables: { first: Math.min(limit, 50) }
+        }
+      );
+
+      const ordersData = await ordersResponse.json();
+      const orders = ordersData.data?.orders?.edges || [];
+
+      if (orders.length === 0) {
+        return json({
+          success: true,
+          message: "No recent orders found for dual tagging",
+          successful: 0,
+          failed: 0,
+          total: 0,
+        });
+      }
+
+      // Format for dual tagging (both customers and orders)
+      const dualTagData = orders.map((orderEdge: any) => {
+        const order = orderEdge.node;
+        const orderId = order.id.split('/').pop(); // Extract numeric ID from GraphQL ID
+        const phone = order.customer?.phone || order.billingAddress?.phone || order.shippingAddress?.phone;
+        const email = order.customer?.email;
+
+        return {
+          orderId,
+          phone,
+          email,
+        };
+      }).filter((item: any) => item.phone || item.email); // Only include orders with customer identifiers
+
+      if (dualTagData.length === 0) {
+        return json({
+          success: true,
+          message: "No orders with customer identifiers found for dual tagging",
+          successful: 0,
+          failed: 0,
+          total: 0,
+        });
+      }
+
+      // Apply dual tags in batch
+      const result = await batchApplyDualRiskTags(
+        admin,
+        dualTagData,
+        session.shop,
+        getDefaultDualTaggingConfig(session.shop)
+      );
+
+      return json({
+        success: true,
+        message: `Batch dual tagging completed: ${result.successful} successful, ${result.failed} failed`,
+        successful: result.successful,
+        failed: result.failed,
+        total: dualTagData.length,
         details: result.results.slice(0, 10), // First 10 results for debugging
       });
 
