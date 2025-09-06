@@ -89,13 +89,30 @@ export async function findShopifyCustomerGraphQL(
       }
     );
 
-    const { data } = await response.json();
+    const responseData = await response.json();
     
-    if (data?.customers?.edges?.length > 0) {
-      const customer = data.customers.edges[0].node;
+    logger.info("GraphQL customer search response", {
+      query,
+      hasData: !!responseData.data,
+      hasCustomers: !!responseData.data?.customers,
+      customerCount: responseData.data?.customers?.edges?.length || 0,
+      errors: responseData.errors,
+    });
+    
+    if (responseData.data?.customers?.edges?.length > 0) {
+      const customer = responseData.data.customers.edges[0].node;
+      
+      logger.info("Found Shopify customer", {
+        customerId: customer.id,
+        hasPhone: !!customer.phone,
+        hasEmail: !!customer.email,
+        tagsType: typeof customer.tags,
+        tagsValue: customer.tags,
+      });
+      
       return {
         id: customer.id,
-        tags: customer.tags ? customer.tags.split(', ') : [],
+        tags: customer.tags && typeof customer.tags === 'string' ? customer.tags.split(', ') : [],
       };
     }
 
@@ -139,7 +156,7 @@ export async function updateCustomerTagsGraphQL(
       return { success: false, error: "Customer not found" };
     }
 
-    const currentTags = data.customer.tags ? data.customer.tags.split(', ') : [];
+    const currentTags = data.customer.tags && typeof data.customer.tags === 'string' ? data.customer.tags.split(', ') : [];
     let updatedTags = [...currentTags];
 
     // Remove old ReturnsX risk tags if configured
@@ -226,12 +243,27 @@ export async function addOrderTagsGraphQL(
       }
     );
 
-    const { data } = await response.json();
-    if (!data?.order) {
+    const responseData = await response.json();
+    
+    logger.info("GraphQL order lookup response", {
+      orderId,
+      hasData: !!responseData.data,
+      hasOrder: !!responseData.data?.order,
+      errors: responseData.errors,
+    });
+    
+    if (!responseData.data?.order) {
       return { success: false, error: "Order not found" };
     }
 
-    const currentTags = data.order.tags ? data.order.tags.split(', ') : [];
+    const order = responseData.data.order;
+    logger.info("Found Shopify order", {
+      orderId: order.id,
+      tagsType: typeof order.tags,
+      tagsValue: order.tags,
+    });
+
+    const currentTags = order.tags && typeof order.tags === 'string' ? order.tags.split(', ') : [];
     let updatedTags = [...currentTags];
 
     // Remove old ReturnsX risk tags if configured
