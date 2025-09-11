@@ -55,5 +55,8 @@ export default [
     
     // Thank you page script
     route("thank-you-script.js", "routes/thank-you-script.js.tsx"),
+    
+    // Test page for thank you script
+    route("test-thank-you-script", "routes/test-thank-you-script.tsx"),
   ]),
 ] satisfies RouteConfig;
