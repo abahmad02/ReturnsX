@@ -1,6 +1,12 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { cors } from "remix-utils/cors";
+// Simple CORS helper function
+function addCorsHeaders(response: Response): Response {
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  return response;
+}
 import { getCustomerRiskFromDatabase } from "../services/dualTagging.server";
 import { logger } from "../services/logger.server";
 
@@ -34,7 +40,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         code: "MISSING_IDENTIFIER"
       }, { status: 400 });
 
-      return cors(request, response);
+      return addCorsHeaders(response);
     }
 
     // Get customer risk data from database
@@ -59,7 +65,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ]
       });
 
-      return cors(request, response);
+      return addCorsHeaders(response);
     }
 
     // Get additional customer profile data for display
@@ -90,7 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderId,
     });
 
-    return cors(request, response);
+    return addCorsHeaders(response);
 
   } catch (error) {
     logger.error("Error in customer risk API", {
@@ -104,7 +110,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       code: "INTERNAL_ERROR"
     }, { status: 500 });
 
-    return cors(request, response);
+    return addCorsHeaders(response);
   }
 }
 
@@ -238,5 +244,6 @@ function getRiskDisplayInfo(riskTier: string) {
 
 // Handle preflight requests for CORS
 export async function options({ request }: LoaderFunctionArgs) {
-  return cors(request, new Response(null, { status: 200 }));
+  const response = new Response(null, { status: 200 });
+  return addCorsHeaders(response);
 }
