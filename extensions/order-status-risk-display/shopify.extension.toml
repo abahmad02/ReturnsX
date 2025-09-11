@@ -7,7 +7,7 @@ name = "ReturnsX Risk Display"
 handle = "returnsx-risk-display"
 
 [[extensions.extension_points]]
-target = "purchase.checkout.block.render"
+target = "purchase.thank-you.block.render"
 module = "./src/OrderStatusRiskDisplay.jsx"
 
 [extensions.settings]
@@ -15,7 +15,7 @@ module = "./src/OrderStatusRiskDisplay.jsx"
 key = "show_risk_score"
 type = "boolean"
 name = "Show Risk Score"
-description = "Display customer risk score on order status page"
+description = "Display customer risk score on thank you page"
 default = true
 
 [[extensions.settings.fields]]
@@ -38,3 +38,10 @@ type = "multi_line_text_field"
 name = "Support Message"
 description = "Custom message for high-risk customers"
 default = "For faster service on future orders, please contact us on WhatsApp"
+
+[[extensions.settings.fields]]
+key = "api_endpoint"
+type = "single_line_text_field"
+name = "API Endpoint"
+description = "ReturnsX API endpoint URL"
+default = "https://returnsx.vercel.app/api/customer-risk"

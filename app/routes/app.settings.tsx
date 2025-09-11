@@ -450,7 +450,7 @@ export default function Settings() {
           </Layout.Section>
         </Layout>
 
-        {/* Thank You Page Script */}
+        {/* Thank You Page Extension */}
         <Layout>
           <Layout.Section>
             <Card>
@@ -459,15 +459,20 @@ export default function Settings() {
                   Thank You Page Display
                 </Text>
                 <Text as="p" variant="bodyMd" tone="subdued">
-                  Install a script to display customer risk information on order confirmation pages.
+                  Customer risk information is displayed on order confirmation pages via the ReturnsX checkout extension.
                 </Text>
 
-                <ThankYouScriptManager />
+                <Banner tone="success">
+                  <p>
+                    <strong>Extension Active:</strong> The ReturnsX checkout extension automatically displays 
+                    customer risk profiles on thank you pages. No additional setup required.
+                  </p>
+                </Banner>
 
                 <Banner tone="info">
                   <p>
-                    The thank you page script shows customer risk profiles after order completion. 
-                    This helps customers understand their status and provides improvement tips.
+                    To customize the display, go to your Shopify admin → Settings → Checkout → 
+                    Checkout extensions → ReturnsX Risk Display
                   </p>
                 </Banner>
               </BlockStack>
@@ -526,100 +531,4 @@ export default function Settings() {
   );
 }
 
-// Component to manage thank you script installation
-function ThankYouScriptManager() {
-  const [scriptStatus, setScriptStatus] = useState<{
-    isInstalled: boolean;
-    loading: boolean;
-    scriptTag: any;
-  }>({
-    isInstalled: false,
-    loading: true,
-    scriptTag: null,
-  });
-
-  const scriptFetcher = useFetcher();
-  const shopify = useAppBridge();
-
-  // Check script status on component mount
-  useEffect(() => {
-    fetch('/api/install-thank-you-script')
-      .then(res => res.json())
-      .then(data => {
-        setScriptStatus({
-          isInstalled: data.isInstalled || false,
-          loading: false,
-          scriptTag: data.scriptTag,
-        });
-      })
-      .catch(() => {
-        setScriptStatus(prev => ({ ...prev, loading: false }));
-      });
-  }, []);
-
-  // Handle script fetcher results
-  useEffect(() => {
-    if (scriptFetcher.data) {
-      if (scriptFetcher.data.success) {
-        setScriptStatus({
-          isInstalled: true,
-          loading: false,
-          scriptTag: scriptFetcher.data.scriptTag,
-        });
-        shopify.toast.show(scriptFetcher.data.message);
-      } else {
-        shopify.toast.show(scriptFetcher.data.error || 'Operation failed', { isError: true });
-      }
-    }
-  }, [scriptFetcher.data, shopify]);
-
-  const installScript = () => {
-    const formData = new FormData();
-    formData.append('action', 'install');
-    scriptFetcher.submit(formData, {
-      method: 'POST',
-      action: '/api/install-thank-you-script',
-    });
-  };
-
-  const uninstallScript = () => {
-    // TODO: Implement uninstall functionality
-    shopify.toast.show('Uninstall functionality coming soon');
-  };
-
-  if (scriptStatus.loading) {
-    return (
-      <InlineStack gap="300" align="center">
-        <Text as="p" variant="bodyMd">Checking script status...</Text>
-      </InlineStack>
-    );
-  }
-
-  return (
-    <InlineStack gap="300" align="space-between">
-      <BlockStack gap="100">
-        <InlineStack gap="200" align="center">
-          <Text as="p" variant="bodyMd" fontWeight="semibold">
-            Thank You Page Script
-          </Text>
-          <Badge tone={scriptStatus.isInstalled ? "success" : "attention"}>
-            {scriptStatus.isInstalled ? "Installed" : "Not Installed"}
-          </Badge>
-        </InlineStack>
-        {scriptStatus.isInstalled && scriptStatus.scriptTag && (
-          <Text as="p" variant="bodySm" tone="subdued">
-            Script ID: {scriptStatus.scriptTag.id}
-          </Text>
-        )}
-      </BlockStack>
-
-      <Button
-        onClick={scriptStatus.isInstalled ? uninstallScript : installScript}
-        loading={scriptFetcher.state === "submitting"}
-        tone={scriptStatus.isInstalled ? "critical" : "success"}
-      >
-        {scriptStatus.isInstalled ? "Uninstall Script" : "Install Script"}
-      </Button>
-    </InlineStack>
-  );
-} 
+ 

@@ -13,44 +13,57 @@ import {
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState } from 'react';
 
-// Modern checkout UI extension
-export default reactExtension('purchase.checkout.block.render', () => <OrderStatusRiskDisplay />);
+// Thank you page UI extension
+export default reactExtension('purchase.thank-you.block.render', () => <OrderStatusRiskDisplay />);
 
 function OrderStatusRiskDisplay() {
-  const { query, i18n } = useApi();
+  const { query, i18n, extension } = useApi();
   const [riskData, setRiskData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Get customer information from checkout API
+  // Get customer and order information from thank you page
   const [customerPhone, setCustomerPhone] = useState(null);
   const [customerEmail, setCustomerEmail] = useState(null);
   const [orderId, setOrderId] = useState(null);
+  const [orderTotal, setOrderTotal] = useState(null);
 
-  // Fetch customer data from checkout
+  // Fetch customer and order data from thank you page
   useEffect(() => {
-    async function getCustomerInfo() {
+    async function getOrderInfo() {
       try {
         const result = await query(`
           query {
-            deliveryAddress {
-              phone
-            }
-            buyerIdentity {
-              email
-              phone
+            order {
+              id
+              totalPrice {
+                amount
+                currencyCode
+              }
+              customer {
+                email
+                phone
+              }
+              shippingAddress {
+                phone
+              }
             }
           }
         `);
         
-        setCustomerPhone(result?.data?.buyerIdentity?.phone || result?.data?.deliveryAddress?.phone);
-        setCustomerEmail(result?.data?.buyerIdentity?.email);
+        const order = result?.data?.order;
+        if (order) {
+          setOrderId(order.id);
+          setOrderTotal(order.totalPrice?.amount);
+          setCustomerEmail(order.customer?.email);
+          setCustomerPhone(order.customer?.phone || order.shippingAddress?.phone);
+        }
       } catch (err) {
-        console.error('Error fetching customer info:', err);
+        console.error('Error fetching order info:', err);
       }
     }
     
-    getCustomerInfo();
+    getOrderInfo();
   }, [query]);
 
   // Fetch customer risk data
@@ -70,8 +83,10 @@ function OrderStatusRiskDisplay() {
         if (orderId) params.append('orderId', orderId);
 
         // Make API call to our ReturnsX backend
-        // Note: In checkout extensions, we need to use the app's API endpoint
-        const apiUrl = `/api/customer-risk?${params.toString()}`;
+        // Get API endpoint from extension settings
+        const apiEndpoint = extension.settings.api_endpoint || 'https://returnsx.vercel.app/api/customer-risk';
+        const apiUrl = `${apiEndpoint}?${params.toString()}`;
+        
         const response = await fetch(apiUrl, {
           method: 'GET',
           headers: {

@@ -1,7 +1,7 @@
 {
   "name": "returnsx-order-status-risk-display",
   "version": "1.0.0",
-  "description": "ReturnsX Checkout UI Extension - Display customer risk information during checkout",
+  "description": "ReturnsX Thank You Page Extension - Display customer risk information after order completion",
   "main": "src/OrderStatusRiskDisplay.jsx",
   "scripts": {
     "build": "shopify app build",
