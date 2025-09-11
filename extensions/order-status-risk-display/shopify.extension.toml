@@ -1,0 +1,40 @@
+api_version = "2024-10"
+
+[[extensions]]
+uid = "bfa03eb1-c6be-f48b-5898-78cad71813a29c61f71d"
+type = "ui_extension"
+name = "ReturnsX Risk Display"
+handle = "returnsx-risk-display"
+
+[[extensions.extension_points]]
+target = "purchase.checkout.block.render"
+module = "./src/OrderStatusRiskDisplay.jsx"
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "show_risk_score"
+type = "boolean"
+name = "Show Risk Score"
+description = "Display customer risk score on order status page"
+default = true
+
+[[extensions.settings.fields]]
+key = "show_improvement_tips"
+type = "boolean" 
+name = "Show Improvement Tips"
+description = "Show tips on how to improve risk score"
+default = true
+
+[[extensions.settings.fields]]
+key = "whatsapp_number"
+type = "single_line_text_field"
+name = "WhatsApp Support Number"
+description = "WhatsApp number for customer support (with country code)"
+default = "+923001234567"
+
+[[extensions.settings.fields]]
+key = "support_message"
+type = "multi_line_text_field"
+name = "Support Message"
+description = "Custom message for high-risk customers"
+default = "For faster service on future orders, please contact us on WhatsApp"
