@@ -32,6 +32,7 @@ export default [
       route("webhooks/register", "routes/api.webhooks.register.tsx"),
       route("whatsapp/send", "routes/api.whatsapp.send.tsx"),
       route("whatsapp/webhook", "routes/api.whatsapp.webhook.tsx"),
+      route("install-thank-you-script", "routes/api.install-thank-you-script.tsx"),
     ]),
     
     // Webhook routes
@@ -51,5 +52,8 @@ export default [
     
     // Checkout enforcement script
     route("checkout-enforcement.js", "routes/checkout-enforcement.js.tsx"),
+    
+    // Thank you page script
+    route("thank-you-script.js", "routes/thank-you-script.js.tsx"),
   ]),
 ] satisfies RouteConfig;
