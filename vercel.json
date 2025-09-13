@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/risk-profile.js": {
-      "maxDuration": 10
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",
