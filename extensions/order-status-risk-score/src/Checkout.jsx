@@ -20,7 +20,7 @@ import { useState, useEffect } from 'react';
  * Works with ALL payment methods including COD.
  */
 export default reactExtension(
-  'purchase.order-status.block.render',
+  'purchase.thank-you.block.render',
   () => <OrderStatusRiskScore />
 );
 
