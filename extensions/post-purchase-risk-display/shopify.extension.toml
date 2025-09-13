@@ -1,0 +1,46 @@
+api_version = "2024-10"
+
+[[extensions]]
+
+uid = "003d96a7-04e3-0499-84f1-c29b449e647ef79999c1"
+
+type = "ui_extension"
+name = "ReturnsX Post-Purchase Risk Display"
+handle = "returnsx-post-purchase-risk"
+
+[[extensions.targeting]]
+module = "./src/PostPurchaseRiskDisplay.jsx"
+target = "purchase.checkout.block.render"
+
+[extensions.capabilities]
+api_access = true
+network_access = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "api_endpoint"
+type = "single_line_text_field"
+name = "API Endpoint"
+description = "ReturnsX backend API endpoint for risk data"
+default = "https://returnsx.vercel.app/api/risk-profile"
+
+[[extensions.settings.fields]]
+key = "correlation_endpoint"
+type = "single_line_text_field"
+name = "Correlation Endpoint"
+description = "Endpoint to store checkout token correlation"
+default = "https://returnsx.vercel.app/api/checkout-correlation"
+
+[[extensions.settings.fields]]
+key = "show_welcome_message"
+type = "boolean"
+name = "Show Welcome Message"
+description = "Display welcome message for new customers"
+default = true
+
+[[extensions.settings.fields]]
+key = "show_improvement_tips"
+type = "boolean"
+name = "Show Improvement Tips"
+description = "Display tips for risk score improvement"
+default = true

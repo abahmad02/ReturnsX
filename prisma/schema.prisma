@@ -120,6 +120,30 @@ model RiskConfig {
   @@map("risk_configs")
 }
 
+model CheckoutCorrelation {
+  id               String    @id @default(cuid())
+  checkoutToken    String    @unique @map("checkout_token")
+  customerPhone    String?   @map("customer_phone")
+  customerEmail    String?   @map("customer_email")
+  customerId       String?   @map("customer_id")
+  orderId          String?   @map("order_id")
+  orderName        String?   @map("order_name")
+  totalAmount      Decimal?  @map("total_amount") @db.Decimal(10, 2)
+  currency         String?   @db.VarChar(3)
+  webUrl           String?   @map("web_url")
+  shopDomain       String    @map("shop_domain")
+  correlationData  String?   @map("correlation_data") @db.Text
+  matched          Boolean   @default(false)
+  matchedAt        DateTime? @map("matched_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([checkoutToken])
+  @@index([shopDomain])
+  @@index([matched])
+  @@map("checkout_correlations")
+}
+
 // Enums
 enum RiskTier {
   ZERO_RISK

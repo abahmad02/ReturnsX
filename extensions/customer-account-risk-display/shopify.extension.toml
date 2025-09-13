@@ -1,0 +1,46 @@
+api_version = "2024-10"
+
+[[extensions]]
+
+uid = "4d1dcebc-7988-7489-64a5-1b2438f35d3e482f25f0"
+
+type = "ui_extension"
+name = "ReturnsX Customer Risk Display"
+handle = "returnsx-customer-risk-display"
+
+[[extensions.targeting]]
+module = "./src/CustomerRiskDisplay.jsx"
+target = "customer-account.order-status.block.render"
+
+[extensions.capabilities]
+api_access = true
+network_access = true
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "api_endpoint"
+type = "single_line_text_field"
+name = "API Endpoint"
+description = "ReturnsX backend API endpoint for risk data"
+default = "https://returnsx.vercel.app/api/risk-profile"
+
+[[extensions.settings.fields]]
+key = "show_detailed_stats"
+type = "boolean"
+name = "Show Detailed Statistics"
+description = "Display detailed order history and risk factors"
+default = true
+
+[[extensions.settings.fields]]
+key = "enable_improvement_tips"
+type = "boolean"
+name = "Enable Improvement Tips"
+description = "Show tips on how customers can improve their risk score"
+default = true
+
+[[extensions.settings.fields]]
+key = "whatsapp_support_number"
+type = "single_line_text_field"
+name = "WhatsApp Support Number"
+description = "WhatsApp number for high-risk customer support (format: +923001234567)"
+default = "+923001234567"

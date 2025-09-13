@@ -5,6 +5,7 @@ import { getOrCreateCustomerProfile, recordOrderEvent } from "../services/custom
 import { verifyWebhookSignature } from "../services/webhookRegistration.server";
 import { updateCustomerProfileRisk } from "../services/riskScoring.server";
 import { applyDualRiskTags } from "../services/dualTagging.server";
+import { getCheckoutCorrelation, markCorrelationMatched } from "./api.checkout-correlation";
 
 /**
  * Webhook handler for orders/create
@@ -42,6 +43,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const order = JSON.parse(rawBody);
     const {
       id: shopifyOrderId,
+      name: orderName,
       customer,
       billing_address,
       shipping_address,
@@ -49,7 +51,15 @@ export async function action({ request }: ActionFunctionArgs) {
       currency,
       financial_status,
       fulfillment_status,
+      checkout_token,
     } = order;
+
+    console.log("Order details:", { 
+      orderId: shopifyOrderId,
+      orderName,
+      hasCheckoutToken: !!checkout_token,
+      checkoutToken: checkout_token?.slice(-8)
+    });
 
     // Extract customer identifiers
     const phone = customer?.phone || billing_address?.phone || shipping_address?.phone;
@@ -73,6 +83,40 @@ export async function action({ request }: ActionFunctionArgs) {
       orderValue: total_price
     });
 
+    // Try to find checkout correlation if checkout_token exists
+    let correlation = null;
+    if (checkout_token) {
+      try {
+        correlation = await getCheckoutCorrelation(checkout_token);
+        
+        if (correlation) {
+          console.log("Found checkout correlation:", {
+            orderId: shopifyOrderId,
+            checkoutToken: checkout_token.slice(-8),
+            correlationId: correlation.id,
+            correlationPhone: correlation.customerPhone,
+            correlationEmail: correlation.customerEmail
+          });
+
+          // Mark correlation as matched
+          await markCorrelationMatched(correlation.id, shopifyOrderId.toString());
+          
+          // Use correlation data to supplement customer info if needed
+          if (!phone && correlation.customerPhone) {
+            console.log("Using phone from checkout correlation");
+          }
+          if (!email && correlation.customerEmail) {
+            console.log("Using email from checkout correlation");
+          }
+        } else {
+          console.log("No checkout correlation found for token:", checkout_token.slice(-8));
+        }
+      } catch (correlationError) {
+        console.warn("Error processing checkout correlation:", correlationError);
+        // Don't fail the webhook for correlation errors
+      }
+    }
+
     try {
       // Get or create customer profile
       const customerProfile = await getOrCreateCustomerProfile({
@@ -81,7 +125,7 @@ export async function action({ request }: ActionFunctionArgs) {
         address: address || undefined,
       }, shop || "unknown");
 
-      // Record the order creation event
+      // Record the order creation event with correlation data
       await recordOrderEvent(
         customerProfile,
         {
@@ -93,6 +137,10 @@ export async function action({ request }: ActionFunctionArgs) {
             financial_status,
             fulfillment_status,
             customer_id: customer?.id,
+            checkout_token,
+            correlation_id: correlation?.id,
+            order_name: orderName,
+            post_purchase_context: !!correlation // Flag to indicate this came from post-purchase extension
           },
         },
         shop || "unknown"
