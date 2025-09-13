@@ -22,7 +22,7 @@ key = "api_endpoint"
 type = "single_line_text_field"
 name = "API Endpoint"
 description = "ReturnsX backend API endpoint for risk data"
-default = "https://returnsx.vercel.app/api/risk-profile"
+default = "https://returnsx.pk/api/risk-profile"
 
 [[extensions.settings.fields]]
 key = "enable_debug"

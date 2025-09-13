@@ -21,7 +21,10 @@ import { useState, useEffect } from 'react';
  */
 export default reactExtension(
   'purchase.thank-you.block.render',
-  () => <OrderStatusRiskScore />
+  () => {
+    console.log('[OrderStatus] Extension rendering...');
+    return <OrderStatusRiskScore />;
+  }
 );
 
 function OrderStatusRiskScore() {
@@ -38,8 +41,18 @@ function OrderStatusRiskScore() {
   const [error, setError] = useState(null);
   const [customerData, setCustomerData] = useState(null);
 
+  // Debug logging
+  console.log('[OrderStatus] Component mounted', {
+    shop: shop?.domain,
+    settings,
+    hasQuery: !!query,
+    hasSessionToken: !!sessionToken
+  });
+
   // Get customer and order information
   useEffect(() => {
+    console.log('[OrderStatus] useEffect triggered for order info');
+    
     async function getOrderInfo() {
       try {
         const orderQuery = await query(`
@@ -227,9 +240,27 @@ function OrderStatusRiskScore() {
     }
   };
 
-  // Render states
+  // Debug render states
+  console.log('[OrderStatus] Render state:', {
+    hasApiEndpoint: !!settings?.api_endpoint,
+    apiEndpoint: settings?.api_endpoint,
+    loading,
+    error,
+    hasRiskData: !!riskData,
+    hasCustomerData: !!customerData
+  });
+
+  // Always show something - don't return null
   if (!settings?.api_endpoint) {
-    return null; // Don't show anything if not configured
+    return (
+      <BlockStack spacing="base">
+        <Divider />
+        <Heading level={3}>⚙️ ReturnsX Configuration</Heading>
+        <Banner tone="warning">
+          Extension not configured. Please set the API endpoint in theme customizer.
+        </Banner>
+      </BlockStack>
+    );
   }
 
   if (loading) {
@@ -318,6 +349,19 @@ function OrderStatusRiskScore() {
       <Text appearance="subdued" size="small">
         ReturnsX helps reduce COD return rates through unified risk assessment
       </Text>
+    </BlockStack>
+  );
+}
+
+// Fallback component to ensure something always renders
+function FallbackDisplay() {
+  return (
+    <BlockStack spacing="base">
+      <Divider />
+      <Heading level={3}>🔧 ReturnsX Debug</Heading>
+      <Banner tone="info">
+        Extension loaded but no data available. Check console for details.
+      </Banner>
     </BlockStack>
   );
 }
