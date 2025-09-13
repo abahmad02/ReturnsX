@@ -77,11 +77,20 @@ function OrderStatusRiskScore() {
           throw new Error('No order data available');
         }
 
+        console.log('[OrderStatus] Order data:', JSON.stringify(order, null, 2));
+
         // Extract customer phone from multiple sources
         const customerPhone = 
           order.customer?.phone || 
           order.billingAddress?.phone || 
           order.shippingAddress?.phone;
+
+        console.log('[OrderStatus] Phone extraction:', {
+          customerPhone: order.customer?.phone,
+          billingPhone: order.billingAddress?.phone,
+          shippingPhone: order.shippingAddress?.phone,
+          finalPhone: customerPhone
+        });
 
         if (!customerPhone) {
           setError('Phone number not available for risk assessment');
@@ -118,23 +127,34 @@ function OrderStatusRiskScore() {
     async function fetchRiskData() {
       try {
         const token = await sessionToken.get();
-        const response = await fetch(
-          `${settings.api_endpoint}?phone=${encodeURIComponent(customerData.phone)}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Shopify-Shop-Domain': shop.domain,
-              'Authorization': `Bearer ${token}`,
-            },
-          }
-        );
+        const apiUrl = `${settings.api_endpoint}?phone=${encodeURIComponent(customerData.phone)}`;
+        
+        console.log('[OrderStatus] Making API call:', {
+          url: apiUrl,
+          phone: customerData.phone,
+          shop: shop.domain,
+          hasToken: !!token
+        });
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Shop-Domain': shop.domain,
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        console.log('[OrderStatus] API response status:', response.status);
 
         if (!response.ok) {
-          throw new Error(`API responded with status: ${response.status}`);
+          const errorText = await response.text();
+          console.error('[OrderStatus] API error response:', errorText);
+          throw new Error(`API responded with status: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json();
+        console.log('[OrderStatus] API response data:', data);
 
         if (data.success) {
           setRiskData(data.profile);
