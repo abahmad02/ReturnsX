@@ -1,0 +1,24 @@
+{
+  "name": "returnsx-risk-api-stub",
+  "version": "1.0.0",
+  "description": "Backend API stub for ReturnsX risk assessment",
+  "main": "backend-api-stub.js",
+  "scripts": {
+    "start": "node backend-api-stub.js",
+    "dev": "nodemon backend-api-stub.js",
+    "test": "curl http://localhost:3000/api/health"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "shopify",
+    "risk-assessment",
+    "cod",
+    "returns"
+  ]
+}
