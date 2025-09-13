@@ -5,7 +5,7 @@ import { getOrCreateCustomerProfile, recordOrderEvent } from "../services/custom
 import { verifyWebhookSignature } from "../services/webhookRegistration.server";
 import { updateCustomerProfileRisk } from "../services/riskScoring.server";
 import { applyDualRiskTags } from "../services/dualTagging.server";
-import { getCheckoutCorrelation, markCorrelationMatched } from "./api.checkout-correlation";
+import { getCheckoutCorrelation, markCorrelationMatched } from "../services/checkoutCorrelation.server";
 
 /**
  * Webhook handler for orders/create
