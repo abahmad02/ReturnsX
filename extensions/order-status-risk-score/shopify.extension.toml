@@ -7,7 +7,7 @@ name = "Order Status Risk Score"
 handle = "order-status-risk-score"
 
 [[extensions.targeting]]
-module = "./src/Checkout.jsx"
+module = "./src/CheckoutSimple.jsx"
 target = "purchase.thank-you.block.render"
 export = "thankYouRender"
 
