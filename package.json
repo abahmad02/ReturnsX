@@ -39,8 +39,6 @@
     "@shopify/polaris": "^12.27.0",
     "@shopify/shopify-app-remix": "^2.8.0",
     "@shopify/shopify-app-session-storage-prisma": "^4.0.5",
-    "@shopify/ui-extensions": "^2025.7.1",
-    "@shopify/ui-extensions-react": "^2025.7.1",
     "isbot": "^4.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -80,9 +78,6 @@
     "vite-tsconfig-paths": "^4.3.2",
     "vitest": "^1.6.0"
   },
-  "workspaces": [
-    "extensions/*"
-  ],
   "trustedDependencies": [
     "@shopify/plugin-cloudflare"
   ],
