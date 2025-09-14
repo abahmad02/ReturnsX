@@ -1,16 +1,14 @@
 api_version = "2024-10"
 
 [[extensions]]
-
 uid = "c222e166-eee5-cfc5-a2b1-e0428e909500d87849fb"
-
 type = "ui_extension"
 name = "Order Status Risk Score"
 handle = "order-status-risk-score"
 
 [[extensions.targeting]]
-module = "./src/Checkout.jsx"
-target = "purchase.thank-you.block.render"
+module = "./index.js"
+target = "purchase.thank-you.customer-information.render-after"
 
 [extensions.capabilities]
 api_access = true
@@ -22,7 +20,6 @@ key = "api_endpoint"
 type = "single_line_text_field"
 name = "API Endpoint"
 description = "ReturnsX backend API endpoint for risk data"
-default = "https://returnsx.pk/api/risk-profile"
 
 [[extensions.settings.fields]]
 key = "enable_debug"

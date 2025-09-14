@@ -1,6 +1,7 @@
 import {
   reactExtension,
   useApi,
+  useOrder,
   useSettings,
   Banner,
   BlockStack,
@@ -20,7 +21,7 @@ import { useState, useEffect } from 'react';
  * Works with ALL payment methods including COD.
  */
 export default reactExtension(
-  'purchase.thank-you.block.render',
+  'purchase.thank-you.customer-information.render-after',
   () => {
     console.log('[OrderStatus] Extension rendering...');
     return <OrderStatusRiskScore />;
@@ -29,123 +30,82 @@ export default reactExtension(
 
 function OrderStatusRiskScore() {
   const { 
-    query, 
+    order, 
     sessionToken,
     shop
   } = useApi();
   
+  // Backup method to get order data
+  const orderFromHook = useOrder();
   const settings = useSettings();
+
+  // Use order from either source
+  const currentOrder = order || orderFromHook;
   
   const [riskData, setRiskData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [customerData, setCustomerData] = useState(null);
 
   // Debug logging
   console.log('[OrderStatus] Component mounted', {
     shop: shop?.domain,
     settings,
-    hasQuery: !!query,
+    order,
+    orderFromHook,
+    currentOrder,
     hasSessionToken: !!sessionToken
   });
 
-  // Get customer and order information
+  // Fetch risk data on mount
   useEffect(() => {
-    console.log('[OrderStatus] useEffect triggered for order info');
-    
-    async function getOrderInfo() {
+    async function fetchRiskData() {
       try {
-        const orderQuery = await query(`
-          query {
-            order {
-              id
-              name
-              customer {
-                id
-                phone
-                email
-                firstName
-                lastName
-              }
-              billingAddress {
-                phone
-              }
-              shippingAddress {
-                phone
-              }
-              totalPrice {
-                amount
-                currencyCode
-              }
-            }
-          }
-        `);
-
-        if (settings?.enable_debug) {
-          console.log('[OrderStatus] Order query result:', orderQuery);
-        }
-
-        const order = orderQuery?.data?.order;
-        if (!order) {
-          throw new Error('No order data available');
-        }
-
-        console.log('[OrderStatus] Order data:', JSON.stringify(order, null, 2));
-
-        // Extract customer phone from multiple sources
-        const customerPhone = 
-          order.customer?.phone || 
-          order.billingAddress?.phone || 
-          order.shippingAddress?.phone;
-
-        console.log('[OrderStatus] Phone extraction:', {
-          customerPhone: order.customer?.phone,
-          billingPhone: order.billingAddress?.phone,
-          shippingPhone: order.shippingAddress?.phone,
-          finalPhone: customerPhone
+        console.log('[OrderStatus] Starting risk data fetch', {
+          hasOrder: !!order,
+          hasSettings: !!settings,
+          apiEndpoint: settings?.api_endpoint
         });
 
-        if (!customerPhone) {
+        // Check if we have the required data
+        if (!currentOrder) {
+          setError('Order data not available');
+          setLoading(false);
+          return;
+        }
+
+        if (!settings?.api_endpoint) {
+          setError('API endpoint not configured');
+          setLoading(false);
+          return;
+        }
+
+        // Extract phone from order
+        const phone = 
+          currentOrder.customer?.phone || 
+          currentOrder.billingAddress?.phone || 
+          currentOrder.shippingAddress?.phone;
+
+        console.log('[OrderStatus] Phone extraction:', {
+          customerPhone: currentOrder.customer?.phone,
+          billingPhone: currentOrder.billingAddress?.phone,
+          shippingPhone: currentOrder.shippingAddress?.phone,
+          finalPhone: phone
+        });
+
+        if (!phone) {
           setError('Phone number not available for risk assessment');
           setLoading(false);
           return;
         }
 
-        setCustomerData({
-          phone: customerPhone,
-          email: order.customer?.email,
-          name: order.customer?.firstName || 'Customer',
-          orderId: order.id,
-          orderName: order.name,
-          totalPrice: order.totalPrice
-        });
-
-      } catch (err) {
-        console.error('[OrderStatus] Failed to get order info:', err);
-        setError('Unable to load order information');
-        setLoading(false);
-      }
-    }
-
-    getOrderInfo();
-  }, [query, settings]);
-
-  // Fetch risk data when customer data is available
-  useEffect(() => {
-    if (!customerData || !settings?.api_endpoint) {
-      setLoading(false);
-      return;
-    }
-
-    async function fetchRiskData() {
-      try {
+        // Get session token and make API call
         const token = await sessionToken.get();
-        const apiUrl = `${settings.api_endpoint}?phone=${encodeURIComponent(customerData.phone)}`;
+        const apiUrl = `${settings.api_endpoint}?phone=${encodeURIComponent(phone)}`;
         
         console.log('[OrderStatus] Making API call:', {
           url: apiUrl,
-          phone: customerData.phone,
-          shop: shop.domain,
+          phone: phone,
+          shop: shop?.domain,
           hasToken: !!token
         });
 
@@ -153,7 +113,7 @@ function OrderStatusRiskScore() {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'X-Shopify-Shop-Domain': shop.domain,
+            'X-Shopify-Shop-Domain': shop?.domain || '',
             'Authorization': `Bearer ${token}`,
           },
         });
@@ -178,7 +138,7 @@ function OrderStatusRiskScore() {
 
       } catch (err) {
         console.error('[OrderStatus] Risk API error:', err);
-        setError('Risk score temporarily unavailable');
+        setError(err.message || 'Risk score temporarily unavailable');
         setRiskData(null);
       } finally {
         setLoading(false);
@@ -186,7 +146,7 @@ function OrderStatusRiskScore() {
     }
 
     fetchRiskData();
-  }, [customerData, sessionToken, settings, shop]);
+  }, [currentOrder, sessionToken, settings, shop]);
 
   // Helper functions
   const getRiskDisplayInfo = (riskTier, riskScore) => {
@@ -247,7 +207,7 @@ function OrderStatusRiskScore() {
     loading,
     error,
     hasRiskData: !!riskData,
-    hasCustomerData: !!customerData
+    hasOrder: !!currentOrder
   });
 
   // Always show something - don't return null
@@ -290,7 +250,7 @@ function OrderStatusRiskScore() {
     );
   }
 
-  if (!riskData || !riskData.success) {
+  if (!riskData) {
     return (
       <BlockStack spacing="base">
         <Divider />
