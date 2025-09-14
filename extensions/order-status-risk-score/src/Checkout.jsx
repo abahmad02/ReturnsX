@@ -1,327 +1,150 @@
 import {
   reactExtension,
-  useApi,
-  useOrder,
-  useSettings,
-  Banner,
   BlockStack,
-  InlineStack,
   Text,
-  TextBlock,
-  Divider,
-  Heading,
-  Spinner,
+  Banner,
+  useApi,
 } from '@shopify/ui-extensions-react/checkout';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-/**
- * Order Status Risk Score Extension
- * 
- * Shows customer's risk score on the Thank-You/Order Status page.
- * Works with ALL payment methods including COD.
- */
+// Define the extension for the Thank You page block
 export default reactExtension(
-  'purchase.thank-you.customer-information.render-after',
-  () => {
-    console.log('[OrderStatus] Extension rendering...');
-    return <OrderStatusRiskScore />;
-  }
+  'purchase.thank-you.block.render',
+  () => <RiskScoreExtension />
 );
 
-function OrderStatusRiskScore() {
-  const { 
-    order, 
-    sessionToken,
-    shop
-  } = useApi();
-  
-  // Backup method to get order data
-  const orderFromHook = useOrder();
-  const settings = useSettings();
-
-  // Use order from either source
-  const currentOrder = order || orderFromHook;
-  
+function RiskScoreExtension() {
+  const api = useApi();
   const [riskData, setRiskData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Debug logging
-  console.log('[OrderStatus] Component mounted', {
-    shop: shop?.domain,
-    settings,
-    order,
-    orderFromHook,
-    currentOrder,
-    hasSessionToken: !!sessionToken
-  });
-
-  // Fetch risk data on mount
   useEffect(() => {
-    async function fetchRiskData() {
-      try {
-        console.log('[OrderStatus] Starting risk data fetch', {
-          hasOrder: !!order,
-          hasSettings: !!settings,
-          apiEndpoint: settings?.api_endpoint
-        });
-
-        // Check if we have the required data
-        if (!currentOrder) {
-          setError('Order data not available');
-          setLoading(false);
-          return;
-        }
-
-        if (!settings?.api_endpoint) {
-          setError('API endpoint not configured');
-          setLoading(false);
-          return;
-        }
-
-        // Extract phone from order
-        const phone = 
-          currentOrder.customer?.phone || 
-          currentOrder.billingAddress?.phone || 
-          currentOrder.shippingAddress?.phone;
-
-        console.log('[OrderStatus] Phone extraction:', {
-          customerPhone: currentOrder.customer?.phone,
-          billingPhone: currentOrder.billingAddress?.phone,
-          shippingPhone: currentOrder.shippingAddress?.phone,
-          finalPhone: phone
-        });
-
-        if (!phone) {
-          setError('Phone number not available for risk assessment');
-          setLoading(false);
-          return;
-        }
-
-        // Get session token and make API call
-        const token = await sessionToken.get();
-        const apiUrl = `${settings.api_endpoint}?phone=${encodeURIComponent(phone)}`;
-        
-        console.log('[OrderStatus] Making API call:', {
-          url: apiUrl,
-          phone: phone,
-          shop: shop?.domain,
-          hasToken: !!token
-        });
-
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Shopify-Shop-Domain': shop?.domain || '',
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        console.log('[OrderStatus] API response status:', response.status);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[OrderStatus] API error response:', errorText);
-          throw new Error(`API responded with status: ${response.status} - ${errorText}`);
-        }
-
-        const data = await response.json();
-        console.log('[OrderStatus] API response data:', data);
-
-        if (data.success) {
-          setRiskData(data.profile);
-          setError(null);
-        } else {
-          throw new Error(data.error || 'Failed to fetch risk profile');
-        }
-
-      } catch (err) {
-        console.error('[OrderStatus] Risk API error:', err);
-        setError(err.message || 'Risk score temporarily unavailable');
-        setRiskData(null);
-      } finally {
-        setLoading(false);
-      }
-    }
-
+    console.log('[Risk Score Extension] Component mounted');
+    console.log('[Risk Score Extension] API object:', api);
+    
     fetchRiskData();
-  }, [currentOrder, sessionToken, settings, shop]);
+  }, []);
 
-  // Helper functions
-  const getRiskDisplayInfo = (riskTier, riskScore) => {
-    switch (riskTier) {
-      case 'HIGH_RISK':
-        return {
-          label: '🔴 High Risk',
-          tone: 'critical',
-          message: 'Please ensure prompt delivery acceptance to improve your score.'
-        };
-      case 'MEDIUM_RISK':
-        return {
-          label: '🟡 Medium Risk',
-          tone: 'warning', 
-          message: 'You have a good track record! Continue accepting deliveries on time.'
-        };
-      default:
-        return {
-          label: '🟢 Low Risk',
-          tone: 'success',
-          message: 'Excellent! You have a perfect delivery record.'
-        };
+  const fetchRiskData = async () => {
+    try {
+      console.log('[Risk Score Extension] Starting risk data fetch...');
+      
+      // Get phone from various sources (different API access points)
+      const phone = api.billingAddress?.phone || api.shippingAddress?.phone || api.buyerIdentity?.phone;
+      
+      console.log('[Risk Score Extension] Available data:', {
+        billingAddress: api.billingAddress,
+        shippingAddress: api.shippingAddress,
+        buyerIdentity: api.buyerIdentity,
+        phone: phone
+      });
+
+      if (!phone) {
+        console.log('[Risk Score Extension] No phone number found');
+        setError('No phone number found');
+        setLoading(false);
+        return;
+      }
+
+      // Get session token
+      const token = await api.sessionToken.get();
+      console.log('[Risk Score Extension] Session token obtained');
+
+      // Make API call to risk profile endpoint
+      const response = await fetch('https://returnsx.pk/api/risk-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          phone: phone
+        })
+      });
+
+      console.log('[Risk Score Extension] API response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[Risk Score Extension] API response data:', data);
+      
+      if (data.success) {
+        setRiskData(data.profile);
+      } else {
+        setRiskData(data);
+      }
+    } catch (err) {
+      console.error('[Risk Score Extension] Error fetching risk data:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const calculateSuccessRate = (data) => {
-    if (!data.totalOrders || data.totalOrders === 0) return 100;
-    const failedAttempts = data.failedAttempts || 0;
-    return Math.round(((data.totalOrders - failedAttempts) / data.totalOrders) * 100);
-  };
-
-  const getImprovementTips = (riskTier) => {
-    switch (riskTier) {
-      case 'HIGH_RISK':
-        return [
-          '• Accept deliveries promptly when they arrive',
-          '• Avoid cancelling orders after placement',
-          '• Consider prepayment for faster processing'
-        ];
-      case 'MEDIUM_RISK':
-        return [
-          '• Continue accepting deliveries on time',
-          '• Keep cancellations to a minimum',
-          '• Ensure contact information is current'
-        ];
-      default:
-        return [
-          '• Keep up the excellent work! 🎉',
-          '• Continue accepting deliveries reliably'
-        ];
-    }
-  };
-
-  // Debug render states
-  console.log('[OrderStatus] Render state:', {
-    hasApiEndpoint: !!settings?.api_endpoint,
-    apiEndpoint: settings?.api_endpoint,
-    loading,
-    error,
-    hasRiskData: !!riskData,
-    hasOrder: !!currentOrder
-  });
-
-  // Always show something - don't return null
-  if (!settings?.api_endpoint) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Heading level={3}>⚙️ ReturnsX Configuration</Heading>
-        <Banner tone="warning">
-          Extension not configured. Please set the API endpoint in theme customizer.
-        </Banner>
-      </BlockStack>
-    );
-  }
-
+  // Show loading state
   if (loading) {
     return (
       <BlockStack spacing="base">
-        <Divider />
-        <InlineStack spacing="tight" blockAlignment="center">
-          <Spinner size="small" />
-          <Text>Loading ReturnsX risk profile...</Text>
-        </InlineStack>
+        <Text size="medium">Loading risk assessment...</Text>
       </BlockStack>
     );
   }
 
-  if (error && !riskData) {
+  // Show error state
+  if (error) {
     return (
       <BlockStack spacing="base">
-        <Divider />
-        <Heading level={3}>📊 ReturnsX Risk Profile</Heading>
-        <Banner tone="info">
-          {error === 'Phone number not available for risk assessment' 
-            ? 'Risk score unavailable - phone number not provided during checkout.'
-            : 'Risk score temporarily unavailable. Your order will be processed normally.'
-          }
+        <Banner status="critical">
+          <Text>Risk Assessment Error: {error}</Text>
         </Banner>
       </BlockStack>
     );
   }
 
-  if (!riskData) {
+  // Show risk data
+  if (riskData) {
+    const { riskScore, riskLevel, message, tips } = riskData;
+    
+    const getBannerStatus = (level) => {
+      switch (level?.toLowerCase()) {
+        case 'high': return 'critical';
+        case 'medium': return 'warning';
+        case 'low': return 'success';
+        default: return 'info';
+      }
+    };
+
     return (
       <BlockStack spacing="base">
-        <Divider />
-        <Heading level={3}>🆕 Welcome to ReturnsX!</Heading>
-        <Banner tone="success">
-          As a new customer, you have Zero Risk status with full COD access.
+        <Banner status={getBannerStatus(riskLevel)}>
+          <BlockStack spacing="tight">
+            <Text size="medium" emphasis="bold">
+              Risk Assessment: {riskLevel} ({riskScore}%)
+            </Text>
+            {message && <Text>{message}</Text>}
+          </BlockStack>
         </Banner>
-        <TextBlock>
-          Your risk score will be updated based on your delivery success rate.
-        </TextBlock>
+        
+        {tips && tips.length > 0 && (
+          <BlockStack spacing="tight">
+            <Text size="small" emphasis="bold">Recommendations:</Text>
+            {tips.map((tip) => (
+              <Text key={tip} size="small">• {tip}</Text>
+            ))}
+          </BlockStack>
+        )}
       </BlockStack>
     );
   }
 
-  const riskInfo = getRiskDisplayInfo(riskData.riskTier, riskData.riskScore);
-  const successRate = calculateSuccessRate(riskData);
-
+  // Fallback - no data to show
   return (
     <BlockStack spacing="base">
-      <Divider />
-      
-      {/* Header */}
-      <Heading level={3}>📊 Your ReturnsX Risk Profile</Heading>
-
-      {/* Risk Score Banner */}
-      <Banner tone={riskInfo.tone}>
-        <BlockStack spacing="tight">
-          <InlineStack spacing="base" blockAlignment="center">
-            <Text emphasis="bold" size="large">{riskInfo.label}</Text>
-            <Text emphasis="bold">Score: {parseFloat(riskData.riskScore).toFixed(1)}/100</Text>
-          </InlineStack>
-          <Text>{riskInfo.message}</Text>
-        </BlockStack>
-      </Banner>
-
-      {/* Statistics */}
-      <BlockStack spacing="tight">
-        <Text emphasis="bold">Your delivery history:</Text>
-        <InlineStack spacing="large">
-          <Text>Total orders: {riskData.totalOrders || 0}</Text>
-          <Text>Success rate: {successRate}%</Text>
-        </InlineStack>
-      </BlockStack>
-
-      {/* Improvement Tips */}
-      {settings?.show_detailed_tips && (
-        <BlockStack spacing="tight">
-          <Text emphasis="bold">Tips for maintaining good standing:</Text>
-          {getImprovementTips(riskData.riskTier).map((tip) => (
-            <Text key={tip} size="small">{tip}</Text>
-          ))}
-        </BlockStack>
-      )}
-
-      {/* Footer */}
-      <Text appearance="subdued" size="small">
-        ReturnsX helps reduce COD return rates through unified risk assessment
-      </Text>
-    </BlockStack>
-  );
-}
-
-// Fallback component to ensure something always renders
-function FallbackDisplay() {
-  return (
-    <BlockStack spacing="base">
-      <Divider />
-      <Heading level={3}>🔧 ReturnsX Debug</Heading>
-      <Banner tone="info">
-        Extension loaded but no data available. Check console for details.
-      </Banner>
+      <Text>No risk assessment data available</Text>
     </BlockStack>
   );
 }
