@@ -125,12 +125,21 @@ function RiskScoreExtension() {
       if ((data.success && data.profile) || (data.riskTier && data.riskScore !== undefined)) {
         // Transform API response to display format
         const profile = data.profile || data; // Handle both success and error responses
+        
+        // Determine message based on profile data
+        let message;
+        if (profile.totalOrders) {
+          message = `Customer Profile: ${profile.totalOrders} orders, ${profile.successfulDeliveries || 0} successful deliveries`;
+        } else if (profile.isNewCustomer) {
+          message = 'New customer profile';
+        } else {
+          message = 'Customer risk assessment completed';
+        }
+        
         setRiskData({
           riskScore: Math.round(profile.riskScore),
           riskLevel: profile.riskTier?.replace(/_/g, ' ') || 'Unknown',
-          message: profile.totalOrders 
-            ? `Customer Profile: ${profile.totalOrders} orders, ${profile.successfulDeliveries || 0} successful deliveries`
-            : (profile.isNewCustomer ? 'New customer profile' : 'Customer risk assessment completed'),
+          message: message,
           tips: getRiskTips(profile)
         });
       } else if (!response.ok && response.status === 401) {
