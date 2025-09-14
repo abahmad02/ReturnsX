@@ -210,37 +210,34 @@ export async function recordOrderEvent(
   });
 
   try {
-    // Check if this order event already exists to prevent duplicates
-    const existingEvent = await (prisma as any).orderEvent.findFirst({
-      where: {
-        customerProfileId: customerProfile.id,
-        shopifyOrderId: eventData.shopifyOrderId,
-        eventType: eventData.eventType,
-        shopDomain,
-      },
-    });
-
-    if (existingEvent) {
-      console.log(`Order event already exists: ${eventData.shopifyOrderId} (${eventData.eventType}) - skipping duplicate`);
-      timer.finish({ action: "skipped_duplicate", orderId: eventData.shopifyOrderId });
-      return customerProfile;
+    // Use create with error handling to manage duplicates gracefully - avoids race conditions
+    try {
+      await (prisma as any).orderEvent.create({
+        data: {
+          customerProfileId: customerProfile.id,
+          shopDomain,
+          shopifyOrderId: eventData.shopifyOrderId,
+          eventType: eventData.eventType,
+          orderValue: eventData.orderValue,
+          currency: eventData.currency,
+          cancelReason: eventData.cancelReason,
+          fulfillmentStatus: eventData.fulfillmentStatus,
+          refundAmount: eventData.refundAmount,
+          eventData: eventData.eventData,
+        },
+      });
+      console.log(`Created order event: ${eventData.shopifyOrderId} (${eventData.eventType})`);
+    } catch (createError: any) {
+      if (createError.code === 'P2002') {
+        // Duplicate constraint violation - this is expected and okay
+        console.log(`Order event already exists: ${eventData.shopifyOrderId} (${eventData.eventType}) - skipping duplicate`);
+        timer.finish({ action: "skipped_duplicate", orderId: eventData.shopifyOrderId });
+        return customerProfile;
+      } else {
+        // Some other error - re-throw it
+        throw createError;
+      }
     }
-
-    // Create the order event record
-    await (prisma as any).orderEvent.create({
-      data: {
-        customerProfileId: customerProfile.id,
-        shopDomain,
-        shopifyOrderId: eventData.shopifyOrderId,
-        eventType: eventData.eventType,
-        orderValue: eventData.orderValue,
-        currency: eventData.currency,
-        cancelReason: eventData.cancelReason,
-        fulfillmentStatus: eventData.fulfillmentStatus,
-        refundAmount: eventData.refundAmount,
-        eventData: eventData.eventData,
-      },
-    });
 
     // Recalculate counters from all events to ensure accuracy
     const allEvents = await (prisma as any).orderEvent.findMany({
