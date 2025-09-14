@@ -7,11 +7,12 @@ import {
 } from '@shopify/ui-extensions-react/checkout';
 import { useEffect, useState } from 'react';
 
-// Define the extension for the Thank You page block
-export default reactExtension(
+// Set up the entry point for the extension
+const thankYouRender = reactExtension(
   'purchase.thank-you.block.render',
   () => <RiskScoreExtension />
 );
+export { thankYouRender };
 
 // Helper function to generate risk-based tips
 function getRiskTips(profile) {
@@ -43,19 +44,24 @@ function getRiskTips(profile) {
 
 function RiskScoreExtension() {
   const api = useApi();
-  const [riskData, setRiskData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [riskData, setRiskData] = useState({
+    riskScore: null,
+    riskLevel: 'Analyzing',
+    message: 'Customer data analysis in progress...',
+    tips: ['Extension loaded successfully', 'Fetching customer profile data']
+  });
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     console.log('[Risk Score Extension] Component mounted');
     console.log('[Risk Score Extension] API object:', api);
     
-    // Start with a simple display, then fetch data when clicked
+    // Start with immediate feedback, then fetch real data
     setTimeout(() => {
       console.log('[Risk Score Extension] Auto-fetching risk data...');
       fetchRiskData();
-    }, 1000);
+    }, 1500);
   }, []);
 
   const fetchRiskData = async () => {
@@ -185,18 +191,26 @@ function RiskScoreExtension() {
 
   return (
     <BlockStack spacing="base">
-      {/* Header */}
+      {/* Always visible header */}
       <Banner status="info">
-        <Text size="medium" emphasis="bold">
-          Order Status Risk Score
-        </Text>
+        <BlockStack spacing="tight">
+          <Text size="medium" emphasis="bold">
+            🛡️ Customer Risk Assessment
+          </Text>
+          <Text size="small">
+            ReturnsX Security Analysis
+          </Text>
+        </BlockStack>
       </Banner>
 
       {/* Loading state */}
       {loading && (
-        <BlockStack spacing="tight">
-          <Text size="medium">🔍 Analyzing customer risk profile...</Text>
-        </BlockStack>
+        <Banner status="info">
+          <BlockStack spacing="tight">
+            <Text size="medium">🔍 Analyzing customer risk profile...</Text>
+            <Text size="small">⏳ Checking order history and patterns</Text>
+          </BlockStack>
+        </Banner>
       )}
 
       {/* Error state - but still functional */}
@@ -227,17 +241,30 @@ function RiskScoreExtension() {
             <BlockStack spacing="tight">
               <Text size="small" emphasis="bold">📋 Recommendations:</Text>
               {riskData.tips.map((tip) => (
-                <Text key={tip} size="small">• {tip}</Text>
+                <Text key={tip.substring(0, 20)} size="small">• {tip}</Text>
               ))}
             </BlockStack>
           )}
         </BlockStack>
       )}
 
-      {/* Fallback when no data yet */}
+      {/* Debug info - shows extension is working */}
+      <Banner status="info">
+        <Text size="small">
+          ✅ Extension Status: Active | Version: 2.0 | Deployment: returnsx-27
+        </Text>
+      </Banner>
+
+      {/* Fallback when no data yet - this should rarely show now */}
       {!loading && !riskData && (
         <BlockStack spacing="tight">
-          <Text size="medium">⏳ Preparing risk assessment...</Text>
+          <Banner status="info">
+            <BlockStack spacing="tight">
+              <Text size="medium" emphasis="bold">Customer Risk Assessment</Text>
+              <Text size="small">📋 No customer data found for this order</Text>
+              <Text size="small">🔍 This may be a new customer or guest checkout</Text>
+            </BlockStack>
+          </Banner>
         </BlockStack>
       )}
     </BlockStack>
