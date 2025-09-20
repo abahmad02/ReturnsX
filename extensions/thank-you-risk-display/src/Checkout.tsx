@@ -74,7 +74,7 @@ function ThankYouRiskDisplay() {
         timestamp: Date.now()
       });
     }
-  }, [config, customerData, analyticsEnabled, trackEvent]);
+  }, [config, customerData, analyticsEnabled]); // Removed trackEvent from dependencies
 
   // Show loading state while configuration is loading
   if (configLoading) {
@@ -303,7 +303,7 @@ function RiskAssessmentView({
         url: window.location.href
       });
     }
-  }, [currentError, trackError]);
+  }, [currentError]); // Removed trackError from dependencies
 
   // Show loading state while fetching risk profile
   if (isLoading || isRetrying) {
@@ -357,7 +357,7 @@ function RiskAssessmentView({
         hasRecommendations: !!riskProfile.recommendations?.length,
         timestamp: Date.now()
       });
-    }, [riskProfile, trackEvent]);
+    }, [riskProfile]); // Removed trackEvent from dependencies
 
     return (
       <RiskProfileView
@@ -416,7 +416,7 @@ function RiskProfileView({
       hasRecommendations: !!riskProfile.recommendations?.length,
       timestamp: Date.now()
     });
-  }, [riskProfile, trackUserInteraction]);
+  }, [riskProfile]); // Removed trackUserInteraction from dependencies
 
   // Handle WhatsApp contact with error handling and analytics
   const handleWhatsAppContact = () => {
