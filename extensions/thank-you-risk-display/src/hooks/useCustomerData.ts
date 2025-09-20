@@ -113,7 +113,7 @@ export function useCustomerData(): {
     // Add a small delay to ensure the page is fully loaded
     const timer = setTimeout(extractCustomerData, 100);
     return () => clearTimeout(timer);
-  }, [handleError]);
+  }, []); // Empty dependency array since we only want this to run once
 
   return {
     customerData,
