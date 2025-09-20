@@ -5,8 +5,8 @@ import {
   View,
   Button,
 } from '@shopify/ui-extensions-react/checkout';
-import { 
-  ErrorBoundary, 
+import {
+  ErrorBoundary,
   RiskAssessmentCard,
   ErrorStateComponent,
   RiskAssessmentLoadingState,
@@ -40,26 +40,26 @@ export default reactExtension(
 function ThankYouRiskDisplay() {
   const { config, isLoading: configLoading, error: configError } = useExtensionConfig();
   const { customerData, isLoading: customerLoading, error: customerError } = useCustomerData();
-  
+
   // Initialize analytics tracking
-  const { 
-    trackEvent, 
-    trackError, 
+  const {
+    trackEvent,
+    trackError,
     trackPerformance,
     startPerformanceTimer,
-    isEnabled: analyticsEnabled 
-  } = useAnalytics({ 
+    isEnabled: analyticsEnabled
+  } = useAnalytics({
     config: config || {} as ExtensionConfig,
-    enabled: true 
+    enabled: true
   });
 
   // Track component performance
   const { trackCustomMetric } = useComponentPerformance('ThankYouRiskDisplay', config || {} as ExtensionConfig);
-  
+
   // Initialize error handling for the main component
-  const { 
+  const {
     handleError: handleMainError,
-  } = useErrorHandling({ 
+  } = useErrorHandling({
     config,
     maxRetries: 2,
     enableAutoRetry: false,
@@ -79,7 +79,7 @@ function ThankYouRiskDisplay() {
   // Show loading state while configuration is loading
   if (configLoading) {
     return (
-      <ConfigurationLoadingState 
+      <ConfigurationLoadingState
         compactMode={false}
         accessibilityLabel="Loading extension configuration"
       />
@@ -89,7 +89,7 @@ function ThankYouRiskDisplay() {
   // Show loading state while customer data is loading
   if (customerLoading) {
     return (
-      <CustomerDataLoadingState 
+      <CustomerDataLoadingState
         compactMode={false}
         accessibilityLabel="Loading customer information"
       />
@@ -99,7 +99,7 @@ function ThankYouRiskDisplay() {
   // Handle configuration errors with fallback
   if (configError) {
     const errorState = handleMainError(new Error(configError), 'configuration');
-    
+
     // Track configuration error
     if (analyticsEnabled) {
       trackError({
@@ -110,11 +110,11 @@ function ThankYouRiskDisplay() {
         url: window.location.href
       });
     }
-    
+
     // For configuration errors, show minimal fallback unless debug mode
     if (!config?.enable_debug_mode) {
       return (
-        <MinimalFallbackState 
+        <MinimalFallbackState
           config={config || {} as ExtensionConfig}
           compactMode={false}
         />
@@ -134,14 +134,14 @@ function ThankYouRiskDisplay() {
   if (customerError || !customerData) {
     if (!config) {
       return (
-        <MinimalFallbackState 
+        <MinimalFallbackState
           config={{} as ExtensionConfig}
           compactMode={false}
         />
       );
     }
 
-    const errorState = customerError ? 
+    const errorState = customerError ?
       handleMainError(new Error(customerError), 'customer-data') : null;
 
     // Track customer data error
@@ -165,7 +165,7 @@ function ThankYouRiskDisplay() {
     }
 
     return (
-      <NewCustomerFallbackState 
+      <NewCustomerFallbackState
         config={config}
         compactMode={false}
         error={errorState}
@@ -178,12 +178,12 @@ function ThankYouRiskDisplay() {
     const validation = validateCustomerData(customerData);
     if (!validation.isValid) {
       const validationError = handleMainError(
-        new Error(`Invalid customer data: ${validation.errors.join(', ')}`), 
+        new Error(`Invalid customer data: ${validation.errors.join(', ')}`),
         'validation'
       );
-      
+
       return (
-        <NewCustomerFallbackState 
+        <NewCustomerFallbackState
           config={config}
           compactMode={false}
           error={validationError}
@@ -194,9 +194,9 @@ function ThankYouRiskDisplay() {
 
   // Main risk assessment component with comprehensive error handling
   return (
-    <RiskAssessmentView 
-      config={config!} 
-      customerData={customerData} 
+    <RiskAssessmentView
+      config={config!}
+      customerData={customerData}
     />
   );
 }
@@ -206,19 +206,19 @@ function ThankYouRiskDisplay() {
 /**
  * Main risk assessment component with comprehensive API integration and error handling
  */
-function RiskAssessmentView({ 
-  config, 
-  customerData 
-}: { 
-  config: ExtensionConfig; 
+function RiskAssessmentView({
+  config,
+  customerData
+}: {
+  config: ExtensionConfig;
   customerData: CustomerData;
 }) {
   // Initialize analytics for this component
-  const { 
-    trackEvent, 
-    trackError, 
+  const {
+    trackEvent,
+    trackError,
     trackApiCall,
-    startPerformanceTimer 
+    startPerformanceTimer
   } = useAnalytics({ config });
 
   // Enable performance monitoring in debug mode
@@ -229,10 +229,10 @@ function RiskAssessmentView({
   // Track API call performance
   const apiStartTime = React.useRef<number>(0);
 
-  const { 
-    riskProfile, 
-    isLoading, 
-    error: apiError, 
+  const {
+    riskProfile,
+    isLoading,
+    error: apiError,
     refetch
   } = useOptimizedRiskProfile({
     config,
@@ -250,7 +250,7 @@ function RiskAssessmentView({
     onApiCallComplete: (success: boolean, error?: string) => {
       const duration = Date.now() - apiStartTime.current;
       trackApiCall(config.api_endpoint, 'POST', apiStartTime.current, success, error);
-      
+
       if (success) {
         trackEvent(AnalyticsEventType.API_CALL_SUCCESS, {
           endpoint: config.api_endpoint,
@@ -269,12 +269,12 @@ function RiskAssessmentView({
   });
 
   // Initialize error handling for API operations
-  const { 
-    error: handledError, 
+  const {
+    error: handledError,
     isRetrying,
     canRetry,
     handleError,
-  } = useErrorHandling({ 
+  } = useErrorHandling({
     config,
     maxRetries: 3,
     retryDelay: 2000,
@@ -308,7 +308,7 @@ function RiskAssessmentView({
   // Show loading state while fetching risk profile
   if (isLoading || isRetrying) {
     return (
-      <RiskAssessmentLoadingState 
+      <RiskAssessmentLoadingState
         message={isRetrying ? "Retrying request..." : "Analyzing your delivery profile..."}
         compactMode={false}
         accessibilityLabel={isRetrying ? "Retrying risk assessment" : "Loading risk assessment"}
@@ -321,7 +321,7 @@ function RiskAssessmentView({
     // For non-retryable errors or max retries reached, show service unavailable fallback
     if (!currentError.retryable || !canRetry) {
       return (
-        <ServiceUnavailableFallbackState 
+        <ServiceUnavailableFallbackState
           config={config}
           compactMode={false}
           error={currentError}
@@ -360,9 +360,9 @@ function RiskAssessmentView({
     }, [riskProfile, trackEvent]);
 
     return (
-      <RiskProfileView 
-        riskProfile={riskProfile} 
-        config={config} 
+      <RiskProfileView
+        riskProfile={riskProfile}
+        config={config}
         customerData={customerData}
         error={currentError}
         onRetry={async () => {
@@ -378,7 +378,7 @@ function RiskAssessmentView({
 
   // Ultimate fallback state
   return (
-    <NewCustomerFallbackState 
+    <NewCustomerFallbackState
       config={config}
       compactMode={false}
       error={currentError}
@@ -391,15 +391,15 @@ function RiskAssessmentView({
 /**
  * Component for displaying risk profile information with comprehensive error handling
  */
-function RiskProfileView({ 
-  riskProfile, 
-  config, 
+function RiskProfileView({
+  riskProfile,
+  config,
   customerData,
   error,
   onRetry
-}: { 
-  riskProfile: RiskProfileResponse; 
-  config: ExtensionConfig; 
+}: {
+  riskProfile: RiskProfileResponse;
+  config: ExtensionConfig;
   customerData: CustomerData;
   error: any;
   onRetry: () => Promise<void>;
@@ -424,7 +424,7 @@ function RiskProfileView({
       const message = config.whatsapp_message_template
         .replace('{orderNumber}', customerData.orderId || 'N/A');
       const whatsappUrl = `https://wa.me/${config.whatsapp_phone.replace(/[^\d]/g, '')}?text=${encodeURIComponent(message)}`;
-      
+
       // Track WhatsApp click
       trackUserInteraction(AnalyticsEventType.WHATSAPP_CLICKED, {
         riskTier: riskProfile.riskTier,
@@ -432,10 +432,10 @@ function RiskProfileView({
         phoneNumber: config.whatsapp_phone,
         timestamp: Date.now()
       });
-      
+
       // Note: In a real Shopify extension, you'd use the proper navigation API
       console.log('WhatsApp URL:', whatsappUrl);
-      
+
       // Attempt to open WhatsApp (browser environment)
       if (typeof window !== 'undefined') {
         window.open(whatsappUrl, '_blank');
@@ -457,9 +457,9 @@ function RiskProfileView({
 
       {/* Error indicator with retry - only show if there's an error but we have fallback data */}
       {error && riskProfile && !riskProfile.success && (
-        <View 
-          border="base" 
-          cornerRadius="base" 
+        <View
+          border="base"
+          cornerRadius="base"
           padding="tight"
           accessibilityRole="alert"
           accessibilityLabel="Connection issue warning"
@@ -469,8 +469,8 @@ function RiskProfileView({
               ⚠️ Using cached data due to connection issues
             </Text>
             {error.retryable && (
-              <Button 
-                onPress={onRetry} 
+              <Button
+                onPress={onRetry}
                 kind="plain"
                 accessibilityLabel="Retry loading fresh data"
               >
