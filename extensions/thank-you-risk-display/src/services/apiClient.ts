@@ -24,6 +24,7 @@ interface ApiClientConfig {
   maxRetries: number;
   retryDelay: number;
   enableDebug: boolean;
+  sessionToken?: string;
 }
 
 interface RetryConfig {
@@ -53,6 +54,7 @@ export class ReturnsXApiClient {
       maxRetries: config.maxRetries || 3,
       retryDelay: config.retryDelay || 1000, // 1 second initial delay
       enableDebug: config.enableDebug || false,
+      sessionToken: config.sessionToken,
     };
 
     // Initialize circuit breaker with default configuration
@@ -677,6 +679,7 @@ export const DEFAULT_API_CONFIG: Partial<ApiClientConfig> = {
   maxRetries: 3,
   retryDelay: 1000,
   enableDebug: false,
+  sessionToken: undefined,
 };
 
 /**

@@ -23,7 +23,7 @@ import { useErrorHandling } from './hooks/useErrorHandling';
 import { useAnalytics, useComponentPerformance } from './hooks/useAnalytics';
 import { globalPerformanceMonitor } from './services/performanceMonitor';
 import { AnalyticsEventType } from './services/analyticsService';
-import { ExtensionConfig, CustomerData, RiskProfileResponse } from './types';
+import { ExtensionConfig, CustomerData, RiskProfileResponse, ErrorType } from './types';
 import { validateCustomerData, sanitizeDebugInfo } from './utils';
 import React from 'react';
 
@@ -103,7 +103,7 @@ function ThankYouRiskDisplay() {
     // Track configuration error
     if (analyticsEnabled) {
       trackError({
-        errorType: 'CONFIGURATION_ERROR',
+        errorType: ErrorType.CONFIGURATION_ERROR,
         message: configError,
         component: 'ThankYouRiskDisplay',
         userAgent: navigator.userAgent,
@@ -147,7 +147,7 @@ function ThankYouRiskDisplay() {
     // Track customer data error
     if (customerError && analyticsEnabled) {
       trackError({
-        errorType: 'NETWORK_ERROR',
+        errorType: ErrorType.NETWORK_ERROR,
         message: customerError,
         component: 'ThankYouRiskDisplay',
         userAgent: navigator.userAgent,
@@ -184,7 +184,7 @@ function ThankYouRiskDisplay() {
 
       return (
         <NewCustomerFallbackState
-          config={config}
+          config={config!}
           compactMode={false}
           error={validationError}
         />
