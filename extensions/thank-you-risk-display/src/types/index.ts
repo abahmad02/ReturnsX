@@ -2,7 +2,6 @@
 export interface ExtensionConfig {
   // Core API settings
   api_endpoint: string;
-  auth_token: string;
   api_timeout: number;
   enable_caching: boolean;
   

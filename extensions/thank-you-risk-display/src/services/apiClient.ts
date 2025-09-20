@@ -20,8 +20,6 @@ import { AuthenticationService, createAuthService, DEFAULT_AUTH_CONFIG } from '.
 
 interface ApiClientConfig {
   baseUrl: string;
-  authToken?: string;
-  sessionToken?: string;
   timeout: number;
   maxRetries: number;
   retryDelay: number;
@@ -51,8 +49,6 @@ export class ReturnsXApiClient {
   constructor(config: Partial<ApiClientConfig>) {
     this.config = {
       baseUrl: config.baseUrl || '',
-      authToken: config.authToken,
-      sessionToken: config.sessionToken,
       timeout: config.timeout || 5000, // 5 second timeout as specified
       maxRetries: config.maxRetries || 3,
       retryDelay: config.retryDelay || 1000, // 1 second initial delay
@@ -190,10 +186,7 @@ export class ReturnsXApiClient {
             headers: {
               'Content-Type': 'application/json',
               ...authHeaders,
-              // Fallback to legacy auth token if no auth service headers
-              ...(Object.keys(authHeaders).length === 0 && this.config.authToken && { 
-                'Authorization': `Bearer ${this.config.authToken}` 
-              }),
+
             },
           }
         );
@@ -596,10 +589,7 @@ export class ReturnsXApiClient {
         method: 'GET',
         headers: {
           ...authHeaders,
-          // Fallback to legacy auth token if no auth service headers
-          ...(Object.keys(authHeaders).length === 0 && this.config.authToken && { 
-            'Authorization': `Bearer ${this.config.authToken}` 
-          }),
+
         },
       });
 

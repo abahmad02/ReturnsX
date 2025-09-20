@@ -30,11 +30,7 @@ name = "ReturnsX API Endpoint"
 description = "The base URL for the ReturnsX risk assessment API"
 default = "https://api.returnsx.com"
 
-[[extensions.settings.fields]]
-key = "auth_token"
-type = "single_line_text_field"
-name = "Authentication Token"
-description = "ReturnsX API authentication token. Contact ReturnsX support for your token."
+
 
 [[extensions.settings.fields]]
 key = "api_timeout"

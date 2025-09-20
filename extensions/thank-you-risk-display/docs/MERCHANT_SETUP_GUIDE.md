@@ -30,7 +30,7 @@ Before installing the extension, ensure you have:
    - The extension will be automatically installed with the ReturnsX app
    - You should see "Thank You Risk Display" in your checkout extensions list
 
-### Step 2: Configure API Connection
+### Step 2: Configure Extension Settings
 
 1. **Access Extension Settings**
    - Go to **Online Store** > **Themes**
@@ -38,16 +38,26 @@ Before installing the extension, ensure you have:
    - Navigate to **Checkout** > **Thank you page**
    - Find the "ReturnsX Risk Display" block
 
-2. **Configure API Settings**
+2. **Configure Required Settings**
    ```
-   API Endpoint URL: https://api.returnsx.com/v1
-   Authentication Token: [Your ReturnsX API token]
-   Enable Debug Mode: No (for production)
+   ReturnsX API Endpoint: https://your-api-domain.com/api
+   API Timeout (seconds): 5 (default)
+   Enable Response Caching: Yes (recommended)
    ```
 
-3. **Test API Connection**
-   - Enable debug mode temporarily
+3. **Configure Display Options**
+   ```
+   Enable Debug Mode: No (for production)
+   Show Detailed Tips: Yes (recommended)
+   Show Risk Score: Yes (optional)
+   Use Color Coding: Yes (recommended)
+   Compact Mode: No (for better readability)
+   ```
+
+4. **Test API Connection**
+   - Save your settings
    - Place a test order to verify the connection
+   - Check the thank you page for risk assessment display
    - Check browser console for any error messages
    - Disable debug mode once confirmed working
 

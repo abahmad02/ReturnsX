@@ -29,7 +29,6 @@ export function useExtensionConfig(): {
     const rawConfig: Partial<ExtensionConfig> = {
       // Core API settings
       api_endpoint: String(settings.api_endpoint || '').trim(),
-      auth_token: String(settings.auth_token || '').trim(),
       api_timeout: Number(settings.api_timeout) || 5,
       enable_caching: Boolean(settings.enable_caching),
       
