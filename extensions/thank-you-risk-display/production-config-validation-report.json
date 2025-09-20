@@ -1,0 +1,303 @@
+{
+  "timestamp": "2025-09-19T21:16:09.735Z",
+  "summary": {
+    "total": 58,
+    "passed": 58,
+    "failed": 0,
+    "warnings": 0
+  },
+  "checks": [
+    {
+      "name": "Production Config",
+      "status": "PASS",
+      "message": "File exists: config/production.json"
+    },
+    {
+      "name": "Production Config (JSON)",
+      "status": "PASS",
+      "message": "Valid JSON syntax"
+    },
+    {
+      "name": "Config Section: api",
+      "status": "PASS",
+      "message": "Section present"
+    },
+    {
+      "name": "Config Section: authentication",
+      "status": "PASS",
+      "message": "Section present"
+    },
+    {
+      "name": "Config Section: monitoring",
+      "status": "PASS",
+      "message": "Section present"
+    },
+    {
+      "name": "Config Section: logging",
+      "status": "PASS",
+      "message": "Section present"
+    },
+    {
+      "name": "Config Section: security",
+      "status": "PASS",
+      "message": "Section present"
+    },
+    {
+      "name": "API Base URL",
+      "status": "PASS",
+      "message": "HTTPS URL configured"
+    },
+    {
+      "name": "API Timeout",
+      "status": "PASS",
+      "message": "Timeout set to 5000ms"
+    },
+    {
+      "name": "Monitoring: errorReporting",
+      "status": "PASS",
+      "message": "Service enabled"
+    },
+    {
+      "name": "Monitoring: performance",
+      "status": "PASS",
+      "message": "Service enabled"
+    },
+    {
+      "name": "Monitoring: analytics",
+      "status": "PASS",
+      "message": "Service enabled"
+    },
+    {
+      "name": "Bash Deployment Script",
+      "status": "PASS",
+      "message": "File exists: scripts/deploy.sh"
+    },
+    {
+      "name": "PowerShell Deployment Script",
+      "status": "PASS",
+      "message": "File exists: scripts/deploy.ps1"
+    },
+    {
+      "name": "Health Check Script",
+      "status": "PASS",
+      "message": "File exists: scripts/health-check.js"
+    },
+    {
+      "name": "GitHub Actions Workflow",
+      "status": "PASS",
+      "message": "File exists: .github/workflows/deploy.yml"
+    },
+    {
+      "name": "CI Job: test",
+      "status": "PASS",
+      "message": "Job defined in workflow"
+    },
+    {
+      "name": "CI Job: security-scan",
+      "status": "PASS",
+      "message": "Job defined in workflow"
+    },
+    {
+      "name": "CI Job: build",
+      "status": "PASS",
+      "message": "Job defined in workflow"
+    },
+    {
+      "name": "CI Job: deploy-production",
+      "status": "PASS",
+      "message": "Job defined in workflow"
+    },
+    {
+      "name": "CI Secret: SHOPIFY_API_KEY",
+      "status": "PASS",
+      "message": "Secret referenced in workflow"
+    },
+    {
+      "name": "CI Secret: SHOPIFY_API_SECRET",
+      "status": "PASS",
+      "message": "Secret referenced in workflow"
+    },
+    {
+      "name": "CI Secret: RETURNSX_API_TOKEN",
+      "status": "PASS",
+      "message": "Secret referenced in workflow"
+    },
+    {
+      "name": "Monitoring Service",
+      "status": "PASS",
+      "message": "File exists: config/monitoring.js"
+    },
+    {
+      "name": "Rate Limiting Service",
+      "status": "PASS",
+      "message": "File exists: config/rate-limiting.js"
+    },
+    {
+      "name": "Logging Service",
+      "status": "PASS",
+      "message": "File exists: config/logging.js"
+    },
+    {
+      "name": "Extension Configuration",
+      "status": "PASS",
+      "message": "File exists: shopify.extension.toml"
+    },
+    {
+      "name": "Extension Setting: environment",
+      "status": "PASS",
+      "message": "Production setting configured"
+    },
+    {
+      "name": "Extension Setting: enable_rate_limiting",
+      "status": "PASS",
+      "message": "Production setting configured"
+    },
+    {
+      "name": "Extension Setting: enable_monitoring_alerts",
+      "status": "PASS",
+      "message": "Production setting configured"
+    },
+    {
+      "name": "Extension Setting: log_level",
+      "status": "PASS",
+      "message": "Production setting configured"
+    },
+    {
+      "name": "Extension Setting: enable_security_headers",
+      "status": "PASS",
+      "message": "Production setting configured"
+    },
+    {
+      "name": "Network Access",
+      "status": "PASS",
+      "message": "Network access enabled"
+    },
+    {
+      "name": "Extension Target",
+      "status": "PASS",
+      "message": "Correct target configured"
+    },
+    {
+      "name": "Environment Template",
+      "status": "PASS",
+      "message": "File exists: .env.production.example"
+    },
+    {
+      "name": "Environment Variable: SHOPIFY_API_KEY",
+      "status": "PASS",
+      "message": "Variable template present"
+    },
+    {
+      "name": "Environment Variable: SHOPIFY_API_SECRET",
+      "status": "PASS",
+      "message": "Variable template present"
+    },
+    {
+      "name": "Environment Variable: RETURNSX_API_TOKEN",
+      "status": "PASS",
+      "message": "Variable template present"
+    },
+    {
+      "name": "Environment Variable: ENCRYPTION_KEY",
+      "status": "PASS",
+      "message": "Variable template present"
+    },
+    {
+      "name": "Environment Variable: JWT_SECRET",
+      "status": "PASS",
+      "message": "Variable template present"
+    },
+    {
+      "name": "Environment Variable: NODE_ENV",
+      "status": "PASS",
+      "message": "Variable template present"
+    },
+    {
+      "name": "Package Configuration",
+      "status": "PASS",
+      "message": "File exists: package.json"
+    },
+    {
+      "name": "Package Configuration (JSON)",
+      "status": "PASS",
+      "message": "Valid JSON syntax"
+    },
+    {
+      "name": "NPM Script: build",
+      "status": "PASS",
+      "message": "Script defined"
+    },
+    {
+      "name": "NPM Script: test:unit",
+      "status": "PASS",
+      "message": "Script defined"
+    },
+    {
+      "name": "NPM Script: test:integration",
+      "status": "PASS",
+      "message": "Script defined"
+    },
+    {
+      "name": "NPM Script: deploy",
+      "status": "PASS",
+      "message": "Script defined"
+    },
+    {
+      "name": "NPM Script: health-check",
+      "status": "PASS",
+      "message": "Script defined"
+    },
+    {
+      "name": "Dependency: @shopify/ui-extensions",
+      "status": "PASS",
+      "message": "Dependency present"
+    },
+    {
+      "name": "Dependency: @shopify/ui-extensions-react",
+      "status": "PASS",
+      "message": "Dependency present"
+    },
+    {
+      "name": "Dependency: react",
+      "status": "PASS",
+      "message": "Dependency present"
+    },
+    {
+      "name": "Deployment Summary",
+      "status": "PASS",
+      "message": "File exists: PRODUCTION_DEPLOYMENT_SUMMARY.md"
+    },
+    {
+      "name": "README Documentation",
+      "status": "PASS",
+      "message": "File exists: README.md"
+    },
+    {
+      "name": "Documentation Directory",
+      "status": "PASS",
+      "message": "Docs directory exists"
+    },
+    {
+      "name": "Documentation: MERCHANT_SETUP_GUIDE.md",
+      "status": "PASS",
+      "message": "Documentation file exists"
+    },
+    {
+      "name": "Documentation: API_CONFIGURATION_GUIDE.md",
+      "status": "PASS",
+      "message": "Documentation file exists"
+    },
+    {
+      "name": "Documentation: TROUBLESHOOTING_GUIDE.md",
+      "status": "PASS",
+      "message": "Documentation file exists"
+    },
+    {
+      "name": "Documentation: DEPLOYMENT_GUIDE.md",
+      "status": "PASS",
+      "message": "Documentation file exists"
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}

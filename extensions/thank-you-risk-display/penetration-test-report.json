@@ -1,0 +1,107 @@
+{
+  "timestamp": "2025-09-19T21:04:55.430Z",
+  "summary": {
+    "HIGH": 5,
+    "PASS": 6,
+    "MEDIUM": 2,
+    "INFO": 1
+  },
+  "results": [
+    {
+      "severity": "HIGH",
+      "category": "XSS Vulnerability",
+      "description": "3 XSS payloads bypassed sanitization",
+      "timestamp": "2025-09-19T21:04:55.351Z"
+    },
+    {
+      "severity": "HIGH",
+      "category": "XSS Details",
+      "description": "Payload bypassed: <script>alert(\"XSS\")</script>...",
+      "timestamp": "2025-09-19T21:04:55.353Z"
+    },
+    {
+      "severity": "HIGH",
+      "category": "XSS Details",
+      "description": "Payload bypassed: javascript:alert(document.domain)...",
+      "timestamp": "2025-09-19T21:04:55.353Z"
+    },
+    {
+      "severity": "HIGH",
+      "category": "XSS Details",
+      "description": "Payload bypassed: <style>@import \"javascript:alert(1)\";</style>...",
+      "timestamp": "2025-09-19T21:04:55.353Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "SQL Injection Protection",
+      "description": "All SQL injection payloads rejected",
+      "timestamp": "2025-09-19T21:04:55.355Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "LDAP Injection Protection",
+      "description": "All LDAP injection payloads rejected",
+      "timestamp": "2025-09-19T21:04:55.355Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Command Injection Protection",
+      "description": "All command injection payloads rejected",
+      "timestamp": "2025-09-19T21:04:55.356Z"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Path Traversal",
+      "description": "1 path traversal payloads accepted",
+      "timestamp": "2025-09-19T21:04:55.357Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "NoSQL Injection Protection",
+      "description": "All NoSQL injection payloads rejected",
+      "timestamp": "2025-09-19T21:04:55.359Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Prototype Pollution Protection",
+      "description": "Prototype pollution attack blocked",
+      "timestamp": "2025-09-19T21:04:55.359Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "All edge cases properly validated",
+      "timestamp": "2025-09-19T21:04:55.361Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "Information Disclosure",
+      "description": "Sensitive data leaked in error: API [REDACTED]: sk_live_123456789",
+      "timestamp": "2025-09-19T21:04:55.363Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "Information Disclosure",
+      "description": "Sensitive data leaked in error: JWT [REDACTED]: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "timestamp": "2025-09-19T21:04:55.363Z"
+    },
+    {
+      "severity": "INFO",
+      "category": "Authentication Testing",
+      "description": "Manual authentication bypass testing recommended",
+      "timestamp": "2025-09-19T21:04:55.365Z"
+    }
+  ],
+  "testCases": {
+    "xssPayloads": 15,
+    "sqlInjectionPayloads": 10,
+    "ldapInjectionPayloads": 6,
+    "commandInjectionPayloads": 10,
+    "pathTraversalPayloads": 9,
+    "nosqlInjectionPayloads": 7,
+    "prototypePollutionPayloads": 5,
+    "xxePayloads": 3,
+    "ssrfPayloads": 6,
+    "headerInjectionPayloads": 5
+  }
+}

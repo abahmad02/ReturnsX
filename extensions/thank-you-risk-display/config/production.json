@@ -1,0 +1,65 @@
+{
+  "api": {
+    "baseUrl": "https://api.returnsx.com",
+    "version": "v1",
+    "timeout": 5000,
+    "retryAttempts": 3,
+    "retryDelay": 1000,
+    "rateLimit": {
+      "requests": 100,
+      "window": 60000
+    }
+  },
+  "authentication": {
+    "tokenEndpoint": "https://auth.returnsx.com/token",
+    "refreshThreshold": 300000,
+    "encryptionKey": "${ENCRYPTION_KEY}",
+    "jwtSecret": "${JWT_SECRET}"
+  },
+  "monitoring": {
+    "errorReporting": {
+      "enabled": true,
+      "endpoint": "https://monitoring.returnsx.com/errors",
+      "sampleRate": 1.0
+    },
+    "performance": {
+      "enabled": true,
+      "endpoint": "https://monitoring.returnsx.com/performance",
+      "sampleRate": 0.1
+    },
+    "analytics": {
+      "enabled": true,
+      "endpoint": "https://analytics.returnsx.com/events",
+      "batchSize": 50,
+      "flushInterval": 30000
+    }
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "destination": "https://logs.returnsx.com/extension",
+    "includeStackTrace": false,
+    "sanitizeData": true
+  },
+  "security": {
+    "enableCSP": true,
+    "allowedOrigins": [
+      "https://*.myshopify.com",
+      "https://checkout.shopify.com"
+    ],
+    "encryptSensitiveData": true,
+    "auditLogging": true
+  },
+  "performance": {
+    "caching": {
+      "enabled": true,
+      "ttl": 300000,
+      "maxSize": 100
+    },
+    "bundleOptimization": {
+      "minify": true,
+      "treeshaking": true,
+      "compression": "gzip"
+    }
+  }
+}

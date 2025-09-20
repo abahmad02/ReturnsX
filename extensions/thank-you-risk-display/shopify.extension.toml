@@ -1,0 +1,166 @@
+# Learn more about configuring your checkout UI extension:
+# https://shopify.dev/docs/api/checkout-ui-extensions/configuration
+
+api_version = "2025-01"
+
+[[extensions]]
+name = "thank-you-risk-display"
+handle = "thank-you-risk-display"
+
+uid = "8d078816-188b-90eb-e876-eeb063f461c5e36a14fa"
+
+type = "ui_extension"
+metafields = []
+
+[[extensions.targeting]]
+target = "purchase.thank-you.block.render"
+module = "./src/Checkout.tsx"
+
+[extensions.capabilities]
+network_access = true
+block_progress = false
+
+[extensions.settings]
+
+# Core API Configuration
+[[extensions.settings.fields]]
+key = "api_endpoint"
+type = "single_line_text_field"
+name = "ReturnsX API Endpoint"
+description = "The base URL for the ReturnsX risk assessment API"
+default = "https://api.returnsx.com"
+
+[[extensions.settings.fields]]
+key = "auth_token"
+type = "single_line_text_field"
+name = "Authentication Token"
+description = "ReturnsX API authentication token. Contact ReturnsX support for your token."
+
+[[extensions.settings.fields]]
+key = "api_timeout"
+type = "number_integer"
+name = "API Timeout (seconds)"
+description = "Timeout for API requests in seconds (default: 5)"
+default = 5
+
+[[extensions.settings.fields]]
+key = "enable_caching"
+type = "boolean"
+name = "Enable Response Caching"
+description = "Cache API responses for better performance during the session"
+default = true
+
+# Display Settings
+[[extensions.settings.fields]]
+key = "enable_debug_mode"
+type = "boolean"
+name = "Enable Debug Mode"
+description = "Show debug information and detailed error messages"
+default = false
+
+[[extensions.settings.fields]]
+key = "show_detailed_tips"
+type = "boolean"
+name = "Show Detailed Tips"
+description = "Display improvement recommendations to customers"
+default = true
+
+[[extensions.settings.fields]]
+key = "show_risk_score"
+type = "boolean"
+name = "Show Risk Score"
+description = "Display numerical risk score to customers"
+default = true
+
+[[extensions.settings.fields]]
+key = "use_color_coding"
+type = "boolean"
+name = "Use Color Coding"
+description = "Use color-coded indicators for risk levels"
+default = true
+
+[[extensions.settings.fields]]
+key = "compact_mode"
+type = "boolean"
+name = "Compact Mode"
+description = "Use compact display format"
+default = false
+
+# Custom Messages
+[[extensions.settings.fields]]
+key = "zero_risk_message"
+type = "multi_line_text_field"
+name = "Zero Risk Customer Message"
+description = "Custom message for customers with zero risk"
+default = "Thank you for being a trusted customer! Your excellent delivery record helps us serve you better."
+
+[[extensions.settings.fields]]
+key = "medium_risk_message"
+type = "multi_line_text_field"
+name = "Medium Risk Customer Message"
+description = "Custom message for customers with medium risk"
+default = "We appreciate your business! Please ensure you're available for delivery to maintain your good standing."
+
+[[extensions.settings.fields]]
+key = "high_risk_message"
+type = "multi_line_text_field"
+name = "High Risk Customer Message"
+description = "Custom message for customers with high risk"
+default = "Important: Please ensure you're available for delivery. Multiple failed deliveries may affect future orders."
+
+[[extensions.settings.fields]]
+key = "new_customer_message"
+type = "multi_line_text_field"
+name = "New Customer Message"
+description = "Custom welcome message for first-time customers"
+default = "Welcome! Thank you for your first order. We're excited to serve you and ensure a smooth delivery experience."
+
+[[extensions.settings.fields]]
+key = "error_message"
+type = "multi_line_text_field"
+name = "Error Fallback Message"
+description = "Message to display when API is unavailable or errors occur"
+default = "Thank you for your order! We'll ensure a smooth delivery experience."
+
+# WhatsApp Integration
+[[extensions.settings.fields]]
+key = "whatsapp_enabled"
+type = "boolean"
+name = "Enable WhatsApp Integration"
+description = "Show WhatsApp contact option for high-risk customers"
+default = true
+
+[[extensions.settings.fields]]
+key = "whatsapp_phone"
+type = "single_line_text_field"
+name = "WhatsApp Phone Number"
+description = "Merchant WhatsApp number with country code (e.g., +923001234567). Required if WhatsApp is enabled."
+
+[[extensions.settings.fields]]
+key = "whatsapp_message_template"
+type = "multi_line_text_field"
+name = "WhatsApp Message Template"
+description = "Template for WhatsApp messages. Available variables: {orderNumber}, {riskTier}, {failedAttempts}."
+default = "Hi, I need help with my order {orderNumber}. I have a high-risk delivery profile and want to ensure successful delivery."
+
+# Advanced Options
+[[extensions.settings.fields]]
+key = "hide_for_prepaid"
+type = "boolean"
+name = "Hide for Prepaid Orders"
+description = "Hide risk assessment for prepaid orders (only show for COD)"
+default = false
+
+[[extensions.settings.fields]]
+key = "analytics_enabled"
+type = "boolean"
+name = "Enable Analytics"
+description = "Enable analytics and monitoring for extension usage and performance"
+default = false
+
+[[extensions.settings.fields]]
+key = "performance_tracking_enabled"
+type = "boolean"
+name = "Enable Performance Tracking"
+description = "Track extension rendering performance and API response times"
+default = true

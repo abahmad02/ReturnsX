@@ -1,0 +1,365 @@
+{
+  "timestamp": "2025-09-19T20:56:14.514Z",
+  "summary": {
+    "PASS": 49,
+    "HIGH": 3,
+    "MEDIUM": 6,
+    "INFO": 1
+  },
+  "findings": [
+    {
+      "severity": "PASS",
+      "category": "Data Transmission",
+      "description": "Customer data hashing implemented",
+      "timestamp": "2025-09-19T20:56:14.444Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Transmission",
+      "description": "Hash creation method implemented",
+      "timestamp": "2025-09-19T20:56:14.445Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Transmission",
+      "description": "SHA-256 hashing implemented",
+      "timestamp": "2025-09-19T20:56:14.445Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Transmission",
+      "description": "No raw PII transmission patterns detected",
+      "timestamp": "2025-09-19T20:56:14.445Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Transmission",
+      "description": "HTTPS enforcement implemented",
+      "timestamp": "2025-09-19T20:56:14.447Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Hashing",
+      "description": "Web Crypto API SHA-256 usage - implemented correctly",
+      "timestamp": "2025-09-19T20:56:14.451Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Hashing",
+      "description": "Data normalization before hashing - implemented correctly",
+      "timestamp": "2025-09-19T20:56:14.451Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Hashing",
+      "description": "Salt usage in hashing - implemented correctly",
+      "timestamp": "2025-09-19T20:56:14.451Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Hashing",
+      "description": "Salt and data combination - implemented correctly",
+      "timestamp": "2025-09-19T20:56:14.451Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Hashing",
+      "description": "Hex string conversion - implemented correctly",
+      "timestamp": "2025-09-19T20:56:14.451Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Hashing",
+      "description": "Both phone and email are hashed consistently",
+      "timestamp": "2025-09-19T20:56:14.451Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Data Hashing",
+      "description": "Hashing function produces expected output format",
+      "timestamp": "2025-09-19T20:56:14.452Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "XSS Prevention",
+      "description": "HTML sanitization function - implemented",
+      "timestamp": "2025-09-19T20:56:14.453Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "XSS Prevention",
+      "description": "Text sanitization function - implemented",
+      "timestamp": "2025-09-19T20:56:14.453Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "XSS Prevention",
+      "description": "Custom message sanitization - implemented",
+      "timestamp": "2025-09-19T20:56:14.453Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "XSS Prevention",
+      "description": "HTML entity encoding - implemented",
+      "timestamp": "2025-09-19T20:56:14.453Z"
+    },
+    {
+      "severity": "HIGH",
+      "category": "XSS Prevention",
+      "description": "HTML tag removal - missing or incomplete",
+      "timestamp": "2025-09-19T20:56:14.453Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "XSS Prevention",
+      "description": "HTML entity escaping - implemented",
+      "timestamp": "2025-09-19T20:56:14.453Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "XSS Prevention",
+      "description": "No explicit sanitization usage found in components",
+      "timestamp": "2025-09-19T20:56:14.467Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "XSS Prevention",
+      "description": "User-generated content sanitization implemented",
+      "timestamp": "2025-09-19T20:56:14.467Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "CSRF Protection",
+      "description": "Bearer token authentication - implemented",
+      "timestamp": "2025-09-19T20:56:14.469Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "CSRF Protection",
+      "description": "Session token header - not found",
+      "timestamp": "2025-09-19T20:56:14.469Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "CSRF Protection",
+      "description": "Shop domain validation header - not found",
+      "timestamp": "2025-09-19T20:56:14.469Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "CSRF Protection",
+      "description": "Customer ID header - not found",
+      "timestamp": "2025-09-19T20:56:14.469Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "CSRF Protection",
+      "description": "JSON content type - implemented",
+      "timestamp": "2025-09-19T20:56:14.469Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "CSRF Protection",
+      "description": "Session token validation implemented",
+      "timestamp": "2025-09-19T20:56:14.469Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "CSRF Protection",
+      "description": "Origin validation through JWT claims",
+      "timestamp": "2025-09-19T20:56:14.469Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "Credential encryption - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "Credential decryption - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "AES-GCM encryption - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "PBKDF2 key derivation - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "Cryptographically secure random values - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "Token expiration checking - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "Token refresh mechanism - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "Authentication Security",
+      "description": "Using localStorage for credential storage - consider more secure alternatives",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "JWT expiration validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "JWT audience validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "JWT issuer/destination validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Authentication Security",
+      "description": "Secure error handling with debug info sanitization",
+      "timestamp": "2025-09-19T20:56:14.470Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Customer data validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Phone number validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Email validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "API response validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Configuration validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Input Validation",
+      "description": "RFC-compliant email validation - missing",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Phone number pattern validation - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Length validation limits - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Maximum length parameters - implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "MEDIUM",
+      "category": "Input Validation",
+      "description": "String truncation - not found",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Input Validation",
+      "description": "Type validation implemented",
+      "timestamp": "2025-09-19T20:56:14.474Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Error Handling",
+      "description": "Error message sanitization - implemented",
+      "timestamp": "2025-09-19T20:56:14.475Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Error Handling",
+      "description": "Debug information sanitization - implemented",
+      "timestamp": "2025-09-19T20:56:14.475Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Error Handling",
+      "description": "Sensitive data redaction - implemented",
+      "timestamp": "2025-09-19T20:56:14.475Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Error Handling",
+      "description": "Sensitive pattern detection - implemented",
+      "timestamp": "2025-09-19T20:56:14.475Z"
+    },
+    {
+      "severity": "HIGH",
+      "category": "Error Handling",
+      "description": "Sensitive field identification - missing",
+      "timestamp": "2025-09-19T20:56:14.475Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Error Handling",
+      "description": "Centralized API error handling",
+      "timestamp": "2025-09-19T20:56:14.475Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Error Handling",
+      "description": "Error boundary implemented",
+      "timestamp": "2025-09-19T20:56:14.476Z"
+    },
+    {
+      "severity": "PASS",
+      "category": "Dependencies",
+      "description": "Security-relevant dependency @shopify/ui-extensions-react found",
+      "timestamp": "2025-09-19T20:56:14.477Z"
+    },
+    {
+      "severity": "INFO",
+      "category": "Dependencies",
+      "description": "Manual dependency vulnerability scan recommended",
+      "timestamp": "2025-09-19T20:56:14.477Z"
+    }
+  ]
+}

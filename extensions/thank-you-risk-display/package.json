@@ -1,0 +1,59 @@
+{
+  "name": "thank-you-risk-display",
+  "version": "1.0.0",
+  "description": "Shopify Thank You page extension for ReturnsX risk assessment display",
+  "main": "build/index.js",
+  "scripts": {
+    "dev": "shopify app dev",
+    "build": "webpack --mode=production",
+    "build:dev": "webpack --mode=development",
+    "test": "vitest",
+    "test:unit": "vitest run --config vitest.config.unit.ts",
+    "test:integration": "vitest run --config vitest.config.integration.ts",
+    "test:e2e": "playwright test",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "deploy": "chmod +x scripts/deploy.sh && ./scripts/deploy.sh",
+    "health-check": "node scripts/health-check.js",
+    "security-audit": "npm audit --audit-level moderate && node security-audit.js"
+  },
+  "dependencies": {
+    "@shopify/ui-extensions": "^2025.1.0",
+    "@shopify/ui-extensions-react": "^2025.1.0",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "jsdom": "^23.0.0",
+    "playwright": "^1.40.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "keywords": [
+    "shopify",
+    "extension",
+    "checkout",
+    "risk-assessment",
+    "returnsx"
+  ],
+  "author": "ReturnsX Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/returnsx/shopify-extensions.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

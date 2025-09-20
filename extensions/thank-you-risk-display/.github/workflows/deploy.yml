@@ -1,0 +1,274 @@
+name: Deploy Thank You Extension to Production
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'extensions/thank-you-risk-display/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  NODE_VERSION: '18'
+  EXTENSION_PATH: 'extensions/thank-you-risk-display'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ env.EXTENSION_PATH }}/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: npm ci
+        
+      - name: Run linting
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: npm run lint
+        
+      - name: Run unit tests
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: npm run test:unit -- --run --coverage
+        
+      - name: Run integration tests
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: npm run test:integration -- --run
+        env:
+          RETURNSX_API_TOKEN: ${{ secrets.RETURNSX_API_TOKEN_TEST }}
+          
+      - name: Run security audit
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: npm audit --audit-level moderate
+        
+      - name: Upload test coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ${{ env.EXTENSION_PATH }}/coverage/lcov.info
+          flags: extension-tests
+          name: extension-coverage
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '${{ env.EXTENSION_PATH }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  build:
+    name: Build Extension
+    runs-on: ubuntu-latest
+    needs: [test, security-scan]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ env.EXTENSION_PATH }}/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: npm ci
+        
+      - name: Build extension
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: Validate build output
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: |
+          if [ ! -f "build/index.js" ]; then
+            echo "Error: Build output missing"
+            exit 1
+          fi
+          echo "Build validation passed"
+          
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: extension-build
+          path: ${{ env.EXTENSION_PATH }}/build/
+          retention-days: 30
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref != 'refs/heads/main' || github.event.inputs.environment == 'staging'
+    environment: staging
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: extension-build
+          path: ${{ env.EXTENSION_PATH }}/build/
+          
+      - name: Setup Shopify CLI
+        uses: shopify/shopify-cli-action@v1
+        
+      - name: Deploy to staging
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: |
+          shopify app deploy --force
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY_STAGING }}
+          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET_STAGING }}
+          
+      - name: Run staging health check
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: node scripts/health-check.js
+        env:
+          RETURNSX_API_TOKEN: ${{ secrets.RETURNSX_API_TOKEN_STAGING }}
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event.inputs.environment != 'staging'
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: extension-build
+          path: ${{ env.EXTENSION_PATH }}/build/
+          
+      - name: Setup Shopify CLI
+        uses: shopify/shopify-cli-action@v1
+        
+      - name: Deploy to production
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: |
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
+          RETURNSX_API_TOKEN: ${{ secrets.RETURNSX_API_TOKEN }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          
+      - name: Run production health check
+        working-directory: ${{ env.EXTENSION_PATH }}
+        run: node scripts/health-check.js
+        env:
+          RETURNSX_API_TOKEN: ${{ secrets.RETURNSX_API_TOKEN }}
+          
+      - name: Setup monitoring alerts
+        run: |
+          curl -X POST "https://monitoring.returnsx.com/alerts" \
+            -H "Authorization: Bearer ${{ secrets.RETURNSX_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "service": "thank-you-extension",
+              "environment": "production",
+              "deployment": {
+                "version": "${{ github.sha }}",
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+                "branch": "${{ github.ref_name }}"
+              }
+            }'
+            
+      - name: Notify deployment success
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: 'Thank You Extension deployed successfully to production'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: success()
+        
+      - name: Notify deployment failure
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: 'Thank You Extension deployment to production failed'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: failure()
+
+  post-deploy-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: success()
+    
+    steps:
+      - name: Wait for deployment to stabilize
+        run: sleep 60
+        
+      - name: Run extended health checks
+        run: |
+          for i in {1..5}; do
+            echo "Health check attempt $i/5"
+            curl -f "https://api.returnsx.com/health" || exit 1
+            sleep 30
+          done
+          
+      - name: Monitor error rates
+        run: |
+          curl -X GET "https://monitoring.returnsx.com/metrics/error-rate" \
+            -H "Authorization: Bearer ${{ secrets.RETURNSX_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            | jq '.error_rate < 0.05' || exit 1
+            
+      - name: Create deployment record
+        run: |
+          curl -X POST "https://api.returnsx.com/deployments" \
+            -H "Authorization: Bearer ${{ secrets.RETURNSX_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "service": "thank-you-extension",
+              "version": "${{ github.sha }}",
+              "environment": "production",
+              "status": "success",
+              "deployed_at": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+            }'
