@@ -30,6 +30,12 @@ interface AnalyticsHook {
 export const useAnalytics = ({ config, enabled = true }: UseAnalyticsOptions): AnalyticsHook => {
   const analyticsServiceRef = useRef<AnalyticsService | null>(null);
   const performanceTimersRef = useRef<Map<string, number>>(new Map());
+  const configRef = useRef(config);
+  
+  // Update config ref when config changes
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   // Initialize analytics service
   useEffect(() => {
@@ -205,7 +211,7 @@ export const useComponentPerformance = (componentName: string, config: Extension
 
     // Reset for next render
     renderStartRef.current = 0;
-  });
+  }, [isEnabled, trackPerformance]); // Add dependencies
 
   const trackCustomMetric = useCallback((metricName: string, value: number, unit?: string) => {
     if (!isEnabled) return;

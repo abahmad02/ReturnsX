@@ -21,21 +21,33 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    // Check if this is a React error #310 (useEffect dependency issue)
+    const isReactError310 = error.message.includes('Minified React error #310');
+    
     // Update state so the next render will show the fallback UI
     return {
       hasError: true,
       error,
       errorState: {
-        type: ErrorType.CONFIGURATION_ERROR,
-        message: 'An unexpected error occurred while loading the risk assessment.',
+        type: isReactError310 ? ErrorType.JAVASCRIPT_ERROR : ErrorType.CONFIGURATION_ERROR,
+        message: isReactError310 
+          ? 'Extension temporarily unavailable due to a rendering issue.'
+          : 'An unexpected error occurred while loading the risk assessment.',
         retryable: false,
       },
     };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error for debugging
-    console.error('Extension Error Boundary caught an error:', error, errorInfo);
+    // Log error for debugging with more context
+    console.error('Extension Error Boundary caught an error:', error);
+    console.error('Error info:', errorInfo);
+    
+    // Check for specific React errors
+    if (error.message.includes('Minified React error #310')) {
+      console.error('React Error #310 detected - this is typically caused by useEffect dependency issues');
+      console.error('Component stack:', errorInfo.componentStack);
+    }
     
     // Call optional error handler
     if (this.props.onError) {

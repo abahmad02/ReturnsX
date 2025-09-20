@@ -41,7 +41,8 @@ function ThankYouRiskDisplay() {
   const { config, isLoading: configLoading, error: configError } = useExtensionConfig();
   const { customerData, isLoading: customerLoading, error: customerError } = useCustomerData();
 
-  // Initialize analytics tracking
+  // Initialize analytics tracking with stable config
+  const analyticsConfig = React.useMemo(() => config || {} as ExtensionConfig, [config]);
   const {
     trackEvent,
     trackError,
@@ -49,12 +50,12 @@ function ThankYouRiskDisplay() {
     startPerformanceTimer,
     isEnabled: analyticsEnabled
   } = useAnalytics({
-    config: config || {} as ExtensionConfig,
+    config: analyticsConfig,
     enabled: true
   });
 
   // Track component performance
-  const { trackCustomMetric } = useComponentPerformance('ThankYouRiskDisplay', config || {} as ExtensionConfig);
+  const { trackCustomMetric } = useComponentPerformance('ThankYouRiskDisplay', analyticsConfig);
 
   // Initialize error handling for the main component
   const {
@@ -65,16 +66,18 @@ function ThankYouRiskDisplay() {
     enableAutoRetry: false,
   });
 
-  // Track extension load
+  // Track extension load with stable dependencies
+  const hasTrackedLoad = React.useRef(false);
   React.useEffect(() => {
-    if (config && analyticsEnabled) {
+    if (config && analyticsEnabled && !hasTrackedLoad.current) {
       trackEvent(AnalyticsEventType.EXTENSION_LOADED, {
         configLoaded: !!config,
         customerDataLoaded: !!customerData,
         timestamp: Date.now()
       });
+      hasTrackedLoad.current = true;
     }
-  }, [config, customerData, analyticsEnabled]); // Removed trackEvent from dependencies
+  }, [config, customerData, analyticsEnabled, trackEvent]);
 
   // Show loading state while configuration is loading
   if (configLoading) {
@@ -292,9 +295,10 @@ function RiskAssessmentView({
   // Convert API error to handled error if needed
   const currentError = apiError ? handleError(new Error(apiError.message), 'api') : handledError;
 
-  // Track errors
+  // Track errors with stable reference
+  const hasTrackedError = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (currentError) {
+    if (currentError && hasTrackedError.current !== currentError.message) {
       trackError({
         errorType: currentError.type,
         message: currentError.message,
@@ -302,8 +306,9 @@ function RiskAssessmentView({
         userAgent: navigator.userAgent,
         url: window.location.href
       });
+      hasTrackedError.current = currentError.message;
     }
-  }, [currentError]); // Removed trackError from dependencies
+  }, [currentError, trackError]);
 
   // Show loading state while fetching risk profile
   if (isLoading || isRetrying) {
@@ -348,16 +353,21 @@ function RiskAssessmentView({
 
   // Show risk profile (either successful or fallback)
   if (riskProfile) {
-    // Track successful render
+    // Track successful render with stable reference
+    const hasTrackedRender = React.useRef<string | null>(null);
+    const riskProfileKey = `${riskProfile.riskTier}-${riskProfile.isNewCustomer}`;
     React.useEffect(() => {
-      trackEvent(AnalyticsEventType.EXTENSION_RENDERED, {
-        renderType: 'risk_profile',
-        riskTier: riskProfile.riskTier,
-        isNewCustomer: riskProfile.isNewCustomer,
-        hasRecommendations: !!riskProfile.recommendations?.length,
-        timestamp: Date.now()
-      });
-    }, [riskProfile]); // Removed trackEvent from dependencies
+      if (hasTrackedRender.current !== riskProfileKey) {
+        trackEvent(AnalyticsEventType.EXTENSION_RENDERED, {
+          renderType: 'risk_profile',
+          riskTier: riskProfile.riskTier,
+          isNewCustomer: riskProfile.isNewCustomer,
+          hasRecommendations: !!riskProfile.recommendations?.length,
+          timestamp: Date.now()
+        });
+        hasTrackedRender.current = riskProfileKey;
+      }
+    }, [riskProfile, trackEvent, riskProfileKey]);
 
     return (
       <RiskProfileView
@@ -407,16 +417,21 @@ function RiskProfileView({
   // Initialize analytics for user interactions
   const { trackUserInteraction } = useAnalytics({ config });
 
-  // Track risk card view
+  // Track risk card view with stable reference
+  const hasTrackedCardView = React.useRef<string | null>(null);
+  const cardViewKey = `${riskProfile.riskTier}-${riskProfile.riskScore}`;
   React.useEffect(() => {
-    trackUserInteraction(AnalyticsEventType.RISK_CARD_VIEWED, {
-      riskTier: riskProfile.riskTier,
-      riskScore: riskProfile.riskScore,
-      isNewCustomer: riskProfile.isNewCustomer,
-      hasRecommendations: !!riskProfile.recommendations?.length,
-      timestamp: Date.now()
-    });
-  }, [riskProfile]); // Removed trackUserInteraction from dependencies
+    if (hasTrackedCardView.current !== cardViewKey) {
+      trackUserInteraction(AnalyticsEventType.RISK_CARD_VIEWED, {
+        riskTier: riskProfile.riskTier,
+        riskScore: riskProfile.riskScore,
+        isNewCustomer: riskProfile.isNewCustomer,
+        hasRecommendations: !!riskProfile.recommendations?.length,
+        timestamp: Date.now()
+      });
+      hasTrackedCardView.current = cardViewKey;
+    }
+  }, [riskProfile, trackUserInteraction, cardViewKey]);
 
   // Handle WhatsApp contact with error handling and analytics
   const handleWhatsAppContact = () => {
