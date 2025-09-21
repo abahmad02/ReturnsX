@@ -45,18 +45,26 @@ function safeToNumberString(value: any, fallback: string = "0"): string {
 
 /**
  * Handle OPTIONS request for CORS preflight
+ * Returns a Response with proper CORS headers for preflight requests
+ */
+function handleOptionsRequest(): Response {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
+}
+
+/**
+ * Handle non-GET requests (POST, PUT, DELETE, etc.)
  */
 export async function action({ request }: LoaderFunctionArgs) {
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Max-Age": "86400",
-      },
-    });
+    return handleOptionsRequest();
   }
   
   return new Response("Method not allowed", { 
@@ -72,15 +80,7 @@ export async function action({ request }: LoaderFunctionArgs) {
 export async function loader({ request }: LoaderFunctionArgs) {
   // Handle OPTIONS request for CORS preflight
   if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Max-Age": "86400",
-      },
-    });
+    return handleOptionsRequest();
   }
 
   const url = new URL(request.url);
