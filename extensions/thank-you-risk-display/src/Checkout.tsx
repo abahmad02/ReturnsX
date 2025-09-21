@@ -89,8 +89,11 @@ function ThankYouRiskDisplay() {
         } else if (typeof process !== 'undefined' && process.env?.REACT_APP_API_ENDPOINT) {
           // 2. Fall back to environment variable
           backendUrl = new URL('/api/get-order-data', process.env.REACT_APP_API_ENDPOINT).toString();
+        } else if (typeof window !== 'undefined' && window.location.hostname.includes('extensions.shopifycdn.com')) {
+          // 3. Development mode - use tunnel URL
+          backendUrl = 'https://active-burner-shipping-viewpicture.trycloudflare.com/api/get-order-data';
         } else {
-          // 3. Finally default to production URL
+          // 4. Finally default to production URL
           backendUrl = 'https://returnsx.pk/api/get-order-data';
         }
         

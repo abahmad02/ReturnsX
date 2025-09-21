@@ -70,6 +70,19 @@ export async function action({ request }: LoaderFunctionArgs) {
  * Used by the extension to fetch customer risk data
  */
 export async function loader({ request }: LoaderFunctionArgs) {
+  // Handle OPTIONS request for CORS preflight
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+
   const url = new URL(request.url);
   const checkoutToken = url.searchParams.get("checkoutToken");
   const customerPhone = url.searchParams.get("customerPhone");
