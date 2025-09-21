@@ -77,26 +77,47 @@ function withLazyLoading<P extends object>(
   return memo((props: P) => (
     <LazyErrorBoundary fallback={fallback}>
       <Suspense fallback={<LazyLoadingFallback message={loadingMessage} />}>
+        {/* @ts-expect-error - React.LazyExoticComponent type constraints conflict with generic P 
+            but props are correctly typed through the function signature */}
         <LazyComponent {...props} />
       </Suspense>
     </LazyErrorBoundary>
   ));
 }
 
+// Define component prop types locally to avoid export issues
+interface LocalRecommendationsListProps {
+  recommendations: string[];
+  riskTier: string;
+  compactMode: boolean;
+}
+
+interface LocalWhatsAppContactProps {
+  config: ExtensionConfig;
+  riskProfile: RiskProfileResponse;
+  onContact?: () => void;
+  compactMode: boolean;
+}
+
+interface LocalCustomerStatisticsProps {
+  riskProfile: RiskProfileResponse;
+  compactMode: boolean;
+}
+
 // Exported lazy components with optimized loading
-export const OptimizedRecommendationsList = withLazyLoading(
+export const OptimizedRecommendationsList = withLazyLoading<LocalRecommendationsListProps>(
   LazyRecommendationsList,
   "Loading recommendations...",
   <Text size="small" appearance="subdued">Recommendations unavailable</Text>
 );
 
-export const OptimizedWhatsAppContact = withLazyLoading(
+export const OptimizedWhatsAppContact = withLazyLoading<LocalWhatsAppContactProps>(
   LazyWhatsAppContact,
   "Loading contact options...",
   <Text size="small" appearance="subdued">Contact options unavailable</Text>
 );
 
-export const OptimizedCustomerStatistics = withLazyLoading(
+export const OptimizedCustomerStatistics = withLazyLoading<LocalCustomerStatisticsProps>(
   LazyCustomerStatistics,
   "Loading statistics...",
   <Text size="small" appearance="subdued">Statistics unavailable</Text>
@@ -136,7 +157,7 @@ export const ConditionalLazyComponents = memo(({
       {shouldShowStatistics && (
         <OptimizedCustomerStatistics
           riskProfile={riskProfile}
-          config={config}
+          compactMode={false}
         />
       )}
 
@@ -144,15 +165,16 @@ export const ConditionalLazyComponents = memo(({
         <OptimizedRecommendationsList
           recommendations={riskProfile.recommendations!}
           riskTier={riskProfile.riskTier}
-          config={config}
+          compactMode={false}
         />
       )}
 
       {shouldShowWhatsApp && (
         <OptimizedWhatsAppContact
           config={config}
-          customerData={customerData}
+          riskProfile={riskProfile}
           onContact={onWhatsAppContact}
+          compactMode={false}
         />
       )}
     </BlockStack>

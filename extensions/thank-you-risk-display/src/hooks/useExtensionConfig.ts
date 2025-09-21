@@ -1,8 +1,8 @@
 import { useSettings } from '@shopify/ui-extensions-react/checkout';
 import { ExtensionConfig } from '../types';
-import { useErrorHandler } from '../components/ErrorBoundary';
 import { validateExtensionConfig } from '../utils/validation';
 import { sanitizeCustomMessage, sanitizeWhatsAppTemplate, sanitizeCssClasses } from '../utils/sanitization';
+import { useErrorHandler } from '../components/ErrorBoundary';
 
 /**
  * Hook to load and validate extension configuration from theme customizer settings
@@ -13,7 +13,7 @@ export function useExtensionConfig(): {
   error: string | null;
 } {
   const settings = useSettings();
-  const handleError = useErrorHandler();
+  const errorHandler = useErrorHandler();
 
   try {
     // If settings are not loaded yet, return loading state
@@ -66,7 +66,8 @@ export function useExtensionConfig(): {
     // Validate the configuration
     const configValidation = validateExtensionConfig(rawConfig);
     if (!configValidation.isValid) {
-      handleError(new Error(`Configuration validation failed: ${configValidation.errors.join(', ')}`), 'useExtensionConfig');
+      console.error('[ReturnsX Extension] Configuration validation failed:', configValidation.errors);
+      errorHandler(new Error(`Configuration validation failed: ${configValidation.errors.join(', ')}`), 'useExtensionConfig:validateConfig');
       return {
         config: null,
         isLoading: false,
@@ -79,7 +80,8 @@ export function useExtensionConfig(): {
     // Additional legacy validation (keeping for backward compatibility)
     const legacyValidationError = validateConfig(config);
     if (legacyValidationError) {
-      handleError(new Error(`Legacy configuration validation failed: ${legacyValidationError}`), 'useExtensionConfig');
+      console.error('[ReturnsX Extension] Legacy configuration validation failed:', legacyValidationError);
+      errorHandler(new Error(legacyValidationError), 'useExtensionConfig:legacyValidation');
       return {
         config: null,
         isLoading: false,
@@ -94,7 +96,8 @@ export function useExtensionConfig(): {
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown configuration error';
-    handleError(error instanceof Error ? error : new Error(errorMessage), 'useExtensionConfig');
+    console.error('[ReturnsX Extension] Configuration error:', error);
+    errorHandler(error instanceof Error ? error : new Error(errorMessage), 'useExtensionConfig:catch');
     
     return {
       config: null,
@@ -138,7 +141,7 @@ function validateConfig(config: ExtensionConfig): string | null {
   }
 
   // Validate fallback contact method format if provided
-  if (config.fallback_contact_method && config.fallback_contact_method.trim()) {
+  if (config.fallback_contact_method?.trim()) {
     const fallback = config.fallback_contact_method.trim();
     // Check if it's an email or phone number
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fallback);

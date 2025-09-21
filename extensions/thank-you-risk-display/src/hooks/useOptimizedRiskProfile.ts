@@ -14,6 +14,15 @@ import { createApiClient } from '../services/apiClient';
 import { extensionCache, createCacheKey } from '../services/cacheService';
 import { globalPerformanceMonitor } from '../services/performanceMonitor';
 
+/**
+ * Helper function to detect circuit breaker errors
+ */
+function isCircuitBreakerError(error: Error | null | undefined): boolean {
+  if (!error) return false;
+  return error.message.includes('Service temporarily unavailable') || 
+         error.message.includes('Circuit breaker is OPEN');
+}
+
 interface UseOptimizedRiskProfileOptions {
   config: ExtensionConfig;
   customerData: CustomerData;
@@ -61,7 +70,6 @@ export function useOptimizedRiskProfile({
     
     return createApiClient({
       baseUrl: config.api_endpoint,
-      authToken: config.auth_token,
       timeout: 5000,
       maxRetries: 3,
       retryDelay: 1000,
@@ -69,7 +77,6 @@ export function useOptimizedRiskProfile({
     });
   }, [
     config?.api_endpoint,
-    config?.auth_token,
     config?.enable_debug_mode,
   ]);
 
@@ -106,6 +113,32 @@ export function useOptimizedRiskProfile({
   // Optimized fetch function with caching and performance monitoring
   const fetchRiskProfile = useCallback(async (bypassCache = false) => {
     if (!apiClient || !requestParams || !generatedCacheKey) {
+      return;
+    }
+
+    // Skip API calls for mock/development data to prevent infinite loops
+    const isMockData = requestParams.email === 'test@example.com' || 
+                      requestParams.phone === '+923001234567' ||
+                      requestParams.orderId?.startsWith('dev-order-');
+    
+    if (isMockData) {
+      console.log('[ReturnsX Extension] Detected mock data, returning fallback response instead of making API call');
+      const mockResponse: RiskProfileResponse = {
+        success: true,
+        riskTier: 'ZERO_RISK',
+        riskScore: 0,
+        totalOrders: 0,
+        failedAttempts: 0,
+        successfulDeliveries: 0,
+        isNewCustomer: true,
+        message: 'Welcome! Thank you for your order. We look forward to serving you.',
+        recommendations: ['Ensure you are available for delivery', 'Keep your phone accessible']
+      };
+      
+      if (isMountedRef.current) {
+        setRiskProfile(mockResponse);
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -169,6 +202,9 @@ export function useOptimizedRiskProfile({
     } catch (err) {
       const apiError = err instanceof Error ? err : new Error('Unknown error');
       
+      // Check if this is a circuit breaker error (service temporarily unavailable)
+      const isBreakerError = isCircuitBreakerError(apiError);
+      
       // Record failed API call
       globalPerformanceMonitor.recordApiCall(
         '/api/risk-profile',
@@ -185,13 +221,31 @@ export function useOptimizedRiskProfile({
 
       if (isMountedRef.current) {
         setError(apiError);
+        
+        // If circuit breaker is open, don't keep retrying - show fallback immediately
+        if (isBreakerError) {
+          console.warn('[ReturnsX Extension] Circuit breaker is open, stopping retries and showing fallback');
+          // Create a fallback response for graceful degradation
+          const fallbackResponse: RiskProfileResponse = {
+            success: false,
+            riskTier: 'ZERO_RISK',
+            riskScore: 0,
+            totalOrders: 0,
+            failedAttempts: 0,
+            successfulDeliveries: 0,
+            isNewCustomer: true,
+            message: 'Welcome! We look forward to serving you.',
+            error: 'Service temporarily unavailable'
+          };
+          setRiskProfile(fallbackResponse);
+        }
       }
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
       }
     }
-  }, [apiClient, requestParams, generatedCacheKey, cacheTtl]);
+  }, [apiClient, requestParams, generatedCacheKey, cacheTtl, onApiCallStart, onApiCallComplete]);
 
   // Memoized refetch function
   const refetch = useCallback(async () => {
@@ -209,8 +263,14 @@ export function useOptimizedRiskProfile({
   useEffect(() => {
     if (!enabled || lazy) return;
     
+    // Don't retry if we have a circuit breaker error
+    if (isCircuitBreakerError(error)) {
+      console.log('[ReturnsX Extension] Skipping fetch due to circuit breaker being open');
+      return;
+    }
+    
     fetchRiskProfile();
-  }, [enabled, lazy, fetchRiskProfile]);
+  }, [enabled, lazy, fetchRiskProfile, error]);
 
   // Cleanup effect
   useEffect(() => {
@@ -297,7 +357,6 @@ export function usePreloadRiskProfile(
         try {
           const apiClient = createApiClient({
             baseUrl: config.config.api_endpoint,
-            authToken: config.config.auth_token,
             enableDebug: false, // Disable debug for preloading
           });
 

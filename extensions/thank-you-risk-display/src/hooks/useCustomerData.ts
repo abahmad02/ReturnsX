@@ -1,5 +1,4 @@
 import { CustomerData } from '../types';
-import { useErrorHandler } from '../components/ErrorBoundary';
 import { useState, useEffect } from 'react';
 
 /**
@@ -12,107 +11,65 @@ export function useCustomerData(): {
   isLoading: boolean;
   error: string | null;
 } {
-  const handleError = useErrorHandler();
   const [customerData, setCustomerData] = useState<CustomerData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function extractCustomerData() {
+    let isMounted = true;
+    
+    const extractCustomerData = async () => {
       try {
-        // For thank-you page extensions, we need to extract data from the global context
-        // or URL parameters since the standard order hooks are not available
+        const orderData = extractOrderDataFromContext();
         
-        let orderData: any = null;
-        
-        // Method 1: Try to get data from Shopify global context
-        if (typeof window !== 'undefined') {
-          // Check for Shopify checkout data
-          if ((window as any).Shopify?.checkout) {
-            orderData = (window as any).Shopify.checkout;
-          }
-          // Check for order data in meta tags or other global variables
-          else if ((window as any).orderData) {
-            orderData = (window as any).orderData;
-          }
-          // Check for data in meta tags
-          else {
-            const orderIdMeta = document.querySelector('meta[name="shopify-checkout-order-id"]');
-            const customerEmailMeta = document.querySelector('meta[name="shopify-checkout-customer-email"]');
-            const customerPhoneMeta = document.querySelector('meta[name="shopify-checkout-customer-phone"]');
-            
-            if (orderIdMeta || customerEmailMeta || customerPhoneMeta) {
-              orderData = {
-                id: orderIdMeta?.getAttribute('content'),
-                email: customerEmailMeta?.getAttribute('content'),
-                phone: customerPhoneMeta?.getAttribute('content'),
-              };
-            }
-          }
-        }
-
-        // Method 2: Try to extract from URL parameters (fallback)
-        if (!orderData && typeof window !== 'undefined') {
-          const urlParams = new URLSearchParams(window.location.search);
-          const orderId = urlParams.get('order_id') || urlParams.get('id');
-          const email = urlParams.get('email');
-          const phone = urlParams.get('phone');
-          
-          if (orderId || email || phone) {
-            orderData = {
-              id: orderId,
-              email: email,
-              phone: phone,
-            };
-          }
-        }
-
-        // Method 3: Create mock data for development/testing
-        if (!orderData) {
-          // In development, we can create mock data
-          // This will be replaced with actual data in production
-          orderData = {
-            id: 'dev-order-' + Date.now(),
-            email: 'test@example.com',
-            phone: '+923001234567',
-            customer: {
-              email: 'test@example.com',
-              phone: '+923001234567',
-            },
-          };
-          
-          console.warn('[ReturnsX Extension] Using mock customer data for development. In production, this should be replaced with actual order data.');
-        }
+        if (!isMounted) return;
 
         // Extract customer data from order
         const extractedData: CustomerData = {
           phone: extractPhoneNumber(orderData),
           email: extractEmail(orderData),
-          orderId: orderData.id || 'unknown',
-          checkoutToken: orderData.token || orderData.id || 'unknown',
+          orderId: orderData?.id || 'unknown',
+          checkoutToken: orderData?.token || orderData?.id || 'unknown',
         };
 
         // Validate that we have at least one identifier
         if (!extractedData.phone && !extractedData.email) {
-          setError('No customer phone or email found in order data');
-          setIsLoading(false);
+          if (isMounted) {
+            setError('No customer phone or email found in order data');
+            setIsLoading(false);
+          }
           return;
         }
 
-        setCustomerData(extractedData);
-        setError(null);
+        if (isMounted) {
+          setCustomerData(extractedData);
+          setError(null);
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to extract customer data';
-        handleError(err instanceof Error ? err : new Error(errorMessage), 'useCustomerData');
-        setError(errorMessage);
+        console.error('[ReturnsX Extension] Error extracting customer data:', err);
+        if (isMounted) {
+          setError(errorMessage);
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-    }
+    };
 
-    // Add a small delay to ensure the page is fully loaded
-    const timer = setTimeout(extractCustomerData, 100);
-    return () => clearTimeout(timer);
+    // Wait for DOM to be ready using requestAnimationFrame for better timing
+    const waitForData = () => {
+      requestAnimationFrame(() => {
+        extractCustomerData();
+      });
+    };
+
+    waitForData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []); // Empty dependency array since we only want this to run once
 
   return {
@@ -120,6 +77,77 @@ export function useCustomerData(): {
     isLoading,
     error,
   };
+}
+
+/**
+ * Extracts order data from various sources (Shopify context, meta tags, URL params)
+ */
+function extractOrderDataFromContext(): any {
+  // Method 1: Try to get data from Shopify global context
+  if (typeof window !== 'undefined') {
+    // Check for Shopify checkout data
+    if ((window as any).Shopify?.checkout) {
+      return (window as any).Shopify.checkout;
+    }
+    // Check for order data in meta tags or other global variables
+    else if ((window as any).orderData) {
+      return (window as any).orderData;
+    }
+    // Check for data in meta tags
+    else {
+      const orderIdMeta = document.querySelector('meta[name="shopify-checkout-order-id"]');
+      const customerEmailMeta = document.querySelector('meta[name="shopify-checkout-customer-email"]');
+      const customerPhoneMeta = document.querySelector('meta[name="shopify-checkout-customer-phone"]');
+      
+      if (orderIdMeta || customerEmailMeta || customerPhoneMeta) {
+        return {
+          id: orderIdMeta?.getAttribute('content'),
+          email: customerEmailMeta?.getAttribute('content'),
+          phone: customerPhoneMeta?.getAttribute('content'),
+        };
+      }
+    }
+  }
+
+  // Method 2: Try to extract from URL parameters (fallback)
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('order_id') || urlParams.get('id');
+    const email = urlParams.get('email');
+    const phone = urlParams.get('phone');
+    
+    if (orderId || email || phone) {
+      return {
+        id: orderId,
+        email: email,
+        phone: phone,
+      };
+    }
+  }
+
+  // Method 3: Create mock data for development/testing
+  // Only use mock data in development environment, not in production
+  const isDevelopment = (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') ||
+    (typeof window !== 'undefined' && window.location?.hostname === 'localhost');
+  
+  if (isDevelopment) {
+    const mockData = {
+      id: 'dev-order-' + Date.now(),
+      email: 'test@example.com',
+      phone: '+923001234567',
+      customer: {
+        email: 'test@example.com',
+        phone: '+923001234567',
+      },
+    };
+    
+    console.warn('[ReturnsX Extension] Using mock customer data for development. API calls will be skipped.');
+    return mockData;
+  }
+
+  // In production, if no data is found, return null instead of mock data
+  console.warn('[ReturnsX Extension] No customer data found in production environment.');
+  return null;
 }
 
 /**

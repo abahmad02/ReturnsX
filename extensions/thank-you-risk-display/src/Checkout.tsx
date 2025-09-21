@@ -4,6 +4,8 @@ import {
   Text,
   View,
   Button,
+  useApi,
+  useSubscription,
 } from '@shopify/ui-extensions-react/checkout';
 import {
   ErrorBoundary,
@@ -17,13 +19,12 @@ import {
   MinimalFallbackState,
 } from './components';
 import { useExtensionConfig } from './hooks/useExtensionConfig';
-import { useCustomerData } from './hooks/useCustomerData';
 import { useOptimizedRiskProfile } from './hooks/useOptimizedRiskProfile';
 import { useErrorHandling } from './hooks/useErrorHandling';
-import { useAnalytics, useComponentPerformance } from './hooks/useAnalytics';
+import { useAnalytics } from './hooks/useAnalytics';
 import { globalPerformanceMonitor } from './services/performanceMonitor';
 import { AnalyticsEventType } from './services/analyticsService';
-import { ExtensionConfig, CustomerData, RiskProfileResponse, ErrorType } from './types';
+import { ExtensionConfig, CustomerData, RiskProfileResponse, ErrorType, ErrorState } from './types';
 import { validateCustomerData, sanitizeDebugInfo } from './utils';
 import React from 'react';
 
@@ -39,23 +40,121 @@ export default reactExtension(
 
 function ThankYouRiskDisplay() {
   const { config, isLoading: configLoading, error: configError } = useExtensionConfig();
-  const { customerData, isLoading: customerLoading, error: customerError } = useCustomerData();
+  
+  // Get order confirmation API for Thank You page - access it correctly
+  const api = useApi();
+  const orderConfirmationData = useSubscription((api as any).orderConfirmation);
+  
+  // Extract customer data from backend via webhook correlation
+  const [customerData, setCustomerData] = React.useState<CustomerData | null>(null);
+  const [customerLoading, setCustomerLoading] = React.useState(true);
+  const [customerError, setCustomerError] = React.useState<string | null>(null);
+  
+  // Constants for retry logic
+  const MAX_RETRIES = 10;
+  const RETRY_DELAY = 200; // Start with 200ms, increase with backoff
+  
+  React.useEffect(() => {
+    async function fetchCustomerDataFromBackend(retryCount = 0) {
+      try {
+        setCustomerLoading(true);
+        
+        // Get order ID from OrderConfirmationApi
+        const orderId = (orderConfirmationData as any)?.order?.id;
+        
+        if (!orderId) {
+          if (retryCount >= MAX_RETRIES) {
+            console.error(`Failed to get order ID after ${MAX_RETRIES} retries, giving up`);
+            setCustomerError('Unable to load order information. Please refresh the page.');
+            setCustomerLoading(false);
+            return;
+          }
+          
+          console.log(`No order ID available yet from OrderConfirmationApi, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          // Use exponential backoff with jitter
+          const delay = RETRY_DELAY * Math.pow(1.5, retryCount) + Math.random() * 100;
+          setTimeout(() => fetchCustomerDataFromBackend(retryCount + 1), delay);
+          return;
+        }
+        
+        console.log('Fetching customer data for order ID:', orderId);
+        
+        // Call the backend API endpoint to get customer data - use absolute URL for sandbox environment
+        // Determine backend URL with proper fallback hierarchy
+        let backendUrl: string;
+        
+        if (config?.api_endpoint) {
+          // 1. Prefer config.api_endpoint when present
+          backendUrl = new URL('/api/get-order-data', config.api_endpoint).toString();
+        } else if (typeof process !== 'undefined' && process.env?.REACT_APP_API_ENDPOINT) {
+          // 2. Fall back to environment variable
+          backendUrl = new URL('/api/get-order-data', process.env.REACT_APP_API_ENDPOINT).toString();
+        } else {
+          // 3. Finally default to production URL
+          backendUrl = 'https://returnsx.pk/api/get-order-data';
+        }
+        
+        console.log('Making API request to:', `${backendUrl}?orderId=${encodeURIComponent(orderId)}`);
+        
+        const response = await fetch(`${backendUrl}?orderId=${encodeURIComponent(orderId)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        console.log('API response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const apiData = await response.json();
+        
+        if (apiData.error) {
+          throw new Error(apiData.error);
+        }
+        
+        // Extract customer data from API response
+        const customer = apiData.customer;
+        const orderInfo = apiData.orderInfo;
+        
+        if (customer || orderInfo) {
+          setCustomerData({
+            phone: customer?.phone || orderInfo?.customerPhone || undefined,
+            email: customer?.email || orderInfo?.customerEmail || undefined,
+            orderId: orderInfo?.orderId || orderId,
+            checkoutToken: undefined, // No longer using checkout tokens
+          });
+        } else {
+          // No customer data found - this is a new customer
+          setCustomerData(null);
+        }
+      } catch (error) {
+        console.error('Error fetching customer data:', error);
+        setCustomerError(`Failed to load customer data: ${error instanceof Error ? error.message : String(error)}`);
+        setCustomerData(null);
+      } finally {
+        setCustomerLoading(false);
+      }
+    }
+    
+    // Only start fetching if we have the API available
+    if ((api as any).orderConfirmation) {
+      fetchCustomerDataFromBackend();
+    }
+  }, [orderConfirmationData, api]);
 
   // Initialize analytics tracking with stable config
   const analyticsConfig = React.useMemo(() => config || {} as ExtensionConfig, [config]);
   const {
     trackEvent,
     trackError,
-    trackPerformance,
-    startPerformanceTimer,
     isEnabled: analyticsEnabled
   } = useAnalytics({
     config: analyticsConfig,
     enabled: true
   });
-
-  // Track component performance
-  const { trackCustomMetric } = useComponentPerformance('ThankYouRiskDisplay', analyticsConfig);
 
   // Initialize error handling for the main component
   const {
@@ -77,7 +176,7 @@ function ThankYouRiskDisplay() {
       });
       hasTrackedLoad.current = true;
     }
-  }, [config, customerData, analyticsEnabled, trackEvent]);
+  }, [config, customerData, analyticsEnabled]); // Removed trackEvent from dependencies
 
   // Show loading state while configuration is loading
   if (configLoading) {
@@ -213,21 +312,25 @@ function RiskAssessmentView({
   config,
   customerData
 }: {
-  config: ExtensionConfig;
-  customerData: CustomerData;
+  readonly config: ExtensionConfig;
+  readonly customerData: CustomerData;
 }) {
   // Initialize analytics for this component
   const {
     trackEvent,
     trackError,
-    trackApiCall,
-    startPerformanceTimer
+    trackApiCall
   } = useAnalytics({ config });
+
+  // Track successful render with stable reference (must be at top of component)
+  const hasTrackedRender = React.useRef<string | null>(null);
 
   // Enable performance monitoring in debug mode
   React.useEffect(() => {
     globalPerformanceMonitor.setEnabled(config.enable_debug_mode);
   }, [config.enable_debug_mode]);
+
+
 
   // Track API call performance
   const apiStartTime = React.useRef<number>(0);
@@ -282,14 +385,14 @@ function RiskAssessmentView({
     maxRetries: 3,
     retryDelay: 2000,
     enableAutoRetry: false,
-    onRetry: (attempt) => {
+    onRetry: React.useCallback((attempt: number) => {
       console.log(`Retrying API request, attempt ${attempt}`);
       trackEvent(AnalyticsEventType.API_CALL_STARTED, {
         endpoint: config.api_endpoint,
         retryAttempt: attempt,
         timestamp: Date.now()
       });
-    },
+    }, [config.api_endpoint]),
   });
 
   // Convert API error to handled error if needed
@@ -308,7 +411,24 @@ function RiskAssessmentView({
       });
       hasTrackedError.current = currentError.message;
     }
-  }, [currentError, trackError]);
+  }, [currentError]); // Removed trackError from dependencies
+
+  // Track render effect (now that riskProfile is available)
+  React.useEffect(() => {
+    if (riskProfile) {
+      const riskProfileKey = `${riskProfile.riskTier}-${riskProfile.isNewCustomer}`;
+      if (hasTrackedRender.current !== riskProfileKey) {
+        trackEvent(AnalyticsEventType.EXTENSION_RENDERED, {
+          renderType: 'risk_profile',
+          riskTier: riskProfile.riskTier,
+          isNewCustomer: riskProfile.isNewCustomer,
+          hasRecommendations: !!riskProfile.recommendations?.length,
+          timestamp: Date.now()
+        });
+        hasTrackedRender.current = riskProfileKey;
+      }
+    }
+  }, [riskProfile]);
 
   // Show loading state while fetching risk profile
   if (isLoading || isRetrying) {
@@ -351,23 +471,10 @@ function RiskAssessmentView({
     );
   }
 
+
+
   // Show risk profile (either successful or fallback)
   if (riskProfile) {
-    // Track successful render with stable reference
-    const hasTrackedRender = React.useRef<string | null>(null);
-    const riskProfileKey = `${riskProfile.riskTier}-${riskProfile.isNewCustomer}`;
-    React.useEffect(() => {
-      if (hasTrackedRender.current !== riskProfileKey) {
-        trackEvent(AnalyticsEventType.EXTENSION_RENDERED, {
-          renderType: 'risk_profile',
-          riskTier: riskProfile.riskTier,
-          isNewCustomer: riskProfile.isNewCustomer,
-          hasRecommendations: !!riskProfile.recommendations?.length,
-          timestamp: Date.now()
-        });
-        hasTrackedRender.current = riskProfileKey;
-      }
-    }, [riskProfile, trackEvent, riskProfileKey]);
 
     return (
       <RiskProfileView
@@ -408,11 +515,11 @@ function RiskProfileView({
   error,
   onRetry
 }: {
-  riskProfile: RiskProfileResponse;
-  config: ExtensionConfig;
-  customerData: CustomerData;
-  error: any;
-  onRetry: () => Promise<void>;
+  readonly riskProfile: RiskProfileResponse;
+  readonly config: ExtensionConfig;
+  readonly customerData: CustomerData;
+  readonly error: ErrorState | null;
+  readonly onRetry: () => Promise<void>;
 }) {
   // Initialize analytics for user interactions
   const { trackUserInteraction } = useAnalytics({ config });

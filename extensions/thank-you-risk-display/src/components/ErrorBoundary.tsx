@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       hasError: true,
       error,
       errorState: {
-        type: isReactError310 ? ErrorType.JAVASCRIPT_ERROR : ErrorType.CONFIGURATION_ERROR,
+        type: isReactError310 ? ErrorType.INVALID_RESPONSE : ErrorType.CONFIGURATION_ERROR,
         message: isReactError310 
           ? 'Extension temporarily unavailable due to a rendering issue.'
           : 'An unexpected error occurred while loading the risk assessment.',
@@ -80,7 +80,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 // Hook-based error boundary for functional components
 export function useErrorHandler() {
   const handleError = useCallback((error: Error, context?: string) => {
-    console.error(`Extension Error${context ? ` (${context})` : ''}:`, error);
+    const errorMessage = context ? `Extension Error (${context}):` : 'Extension Error:';
+    console.error(errorMessage, error);
     
     // In a real implementation, you might want to send this to an error reporting service
     // For now, we'll just log it
