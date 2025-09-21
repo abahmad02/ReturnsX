@@ -3,6 +3,67 @@ import { json } from "@remix-run/node";
 import { getCheckoutCorrelation } from "../services/checkoutCorrelation.server";
 import { getCustomerProfileByPhone } from "../services/customerProfile.server";
 import { logger } from "../services/logger.server";
+import prisma from "../db.server";
+
+/**
+ * Safely convert a value to a finite number or return a fallback
+ * Handles null, undefined, NaN, Infinity, and non-numeric values
+ */
+function safeToNumber(value: any, fallback: number = 0): number {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+  
+  // Handle Decimal type (from Prisma) by converting to number first
+  if (typeof value === 'object' && value.toNumber) {
+    const decimalNum = value.toNumber();
+    return Number.isFinite(decimalNum) ? decimalNum : fallback;
+  }
+  
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+/**
+ * Safely convert a value to a string representation of a number or return a fallback
+ * Handles null, undefined, NaN, Infinity, and non-numeric values
+ */
+function safeToNumberString(value: any, fallback: string = "0"): string {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+  
+  // Handle Decimal type (from Prisma) by converting to number first
+  if (typeof value === 'object' && value.toNumber) {
+    const decimalNum = value.toNumber();
+    return Number.isFinite(decimalNum) ? String(decimalNum) : fallback;
+  }
+  
+  const num = Number(value);
+  return Number.isFinite(num) ? String(num) : fallback;
+}
+
+/**
+ * Handle OPTIONS request for CORS preflight
+ */
+export async function action({ request }: LoaderFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+  
+  return new Response("Method not allowed", { 
+    status: 405,
+    headers: getCorsHeaders()
+  });
+}
 
 /**
  * API endpoint to get order data based on checkout token
@@ -27,7 +88,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!checkoutToken && !customerPhone && !orderName && !orderId) {
     return json({
       error: "Missing required parameter: checkoutToken, customerPhone, orderName, or orderId"
-    }, { status: 400 });
+    }, { 
+      status: 400,
+      headers: getCorsHeaders()
+    });
   }
 
   return await getOrderDataInternal(checkoutToken, customerPhone, orderName, orderId);
@@ -68,28 +132,109 @@ async function getOrderDataInternal(
       }
     }
 
-    // If no data yet and we have orderId, try to extract and lookup
+    // If no data yet and we have orderId, try to extract and lookup from internal database
     if (!customerData && !orderInfo && orderId) {
       // Extract numeric ID from Shopify GID (e.g., gid://shopify/OrderIdentity/5971448463430)
       const numericOrderId = orderId.includes('/') ? orderId.split('/').pop() : orderId;
-      if (numericOrderId) {
-        // Look up order data by numeric ID (you may need to implement this lookup)
-        logger.info("Looking up order by numeric ID", { 
-          component: "getOrderData",
-          numericOrderId 
-        });
-        
-        // For now, create a basic order info structure
-        // In a full implementation, you'd query your database for this order
-        orderInfo = {
-          orderId: numericOrderId,
-          orderName: null, // Would be populated from database
-          totalAmount: null,
-          currency: null,
-          customerEmail: null,
-          customerPhone: null,
-          customerId: null
-        };
+      
+      logger.info("Looking up order by numeric ID", { 
+        component: "getOrderData",
+        originalOrderId: orderId,
+        extractedNumericOrderId: numericOrderId 
+      });
+      
+      if (numericOrderId && numericOrderId !== '0' && Number.isFinite(Number(numericOrderId))) {
+        try {
+          // Look up order events in our database to find customer data
+          const orderEvents = await prisma.orderEvent.findMany({
+            where: {
+              shopifyOrderId: numericOrderId
+            },
+            include: {
+              customerProfile: true
+            },
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 1
+          });
+          
+          if (orderEvents.length > 0) {
+            const orderEvent = orderEvents[0];
+            const customer = orderEvent.customerProfile;
+            
+            // Build order info from database
+            orderInfo = {
+              orderId: numericOrderId,
+              orderName: `#${numericOrderId.slice(-4)}`, // Use last 4 digits as order name
+              totalAmount: safeToNumberString(orderEvent.orderValue),
+              currency: orderEvent.currency || 'PKR',
+              customerEmail: customer.email,
+              customerPhone: customer.phone,
+              customerId: customer.id
+            };
+            
+            // Build customer data from our internal profile
+            customerData = {
+              id: customer.id,
+              phone: customer.phone,
+              email: customer.email,
+              riskLevel: customer.riskTier,
+              riskScore: safeToNumber(customer.riskScore, 0),
+              riskFactors: [], // Would need to be calculated from order events
+              orderCount: customer.totalOrders,
+              totalSpent: 0, // Would need to be calculated from order events
+              avgOrderValue: 0, // Would need to be calculated from order events
+              returnRate: safeToNumber(customer.returnRate, 0),
+              chargebackCount: 0, // Not in current schema
+              fraudReports: 0, // Not in current schema
+              lastOrderDate: customer.lastEventAt,
+              createdAt: customer.createdAt,
+              updatedAt: customer.updatedAt
+            };
+          } else {
+            // Try to find checkout correlation data as fallback
+            const correlations = await prisma.checkoutCorrelation.findMany({
+              where: {
+                orderId: numericOrderId
+              },
+              orderBy: {
+                createdAt: 'desc'
+              },
+              take: 1
+            });
+            
+            if (correlations.length > 0) {
+              const correlation = correlations[0];
+              
+              orderInfo = {
+                orderId: numericOrderId,
+                orderName: correlation.orderName,
+                totalAmount: correlation.totalAmount,
+                currency: correlation.currency,
+                customerEmail: correlation.customerEmail,
+                customerPhone: correlation.customerPhone,
+                customerId: correlation.customerId
+              };
+              
+              // Try to get customer profile by phone
+              if (correlation.customerPhone) {
+                customerData = await getCustomerProfileByPhone(correlation.customerPhone);
+              }
+            } else {
+              logger.warn("Order not found in database", {
+                component: "getOrderData",
+                orderId: numericOrderId
+              });
+            }
+          }
+        } catch (error) {
+          logger.error("Error fetching order from database", {
+            component: "getOrderData",
+            orderId: numericOrderId,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
       }
     }
 
@@ -113,8 +258,22 @@ async function getOrderDataInternal(
         timestamp: new Date().toISOString(),
         message: error instanceof Error ? error.message : String(error)
       }
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: getCorsHeaders()
+    });
   }
+}
+
+/**
+ * Get CORS headers for Shopify extensions
+ */
+function getCorsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
 }
 
 /**
@@ -128,12 +287,42 @@ function formatResponse(
   orderName: string | null,
   orderId: string | null
 ) {
+  // Ensure we have customer identifiers either in customer data or orderInfo
+  const finalCustomerPhone = customerData?.phone || orderInfo?.customerPhone || customerPhone;
+  const finalCustomerEmail = customerData?.email || orderInfo?.customerEmail;
+
+  // Create a guest customer fallback if we have no customer data but have identifiers
+  let guestCustomerFallback = null;
+  if (!customerData && (finalCustomerPhone || finalCustomerEmail)) {
+    guestCustomerFallback = {
+      id: null,
+      phone: finalCustomerPhone,
+      email: finalCustomerEmail,
+      riskLevel: 'unknown',
+      riskScore: 0,
+      riskFactors: [],
+      orderCount: 0,
+      totalSpent: 0,
+      avgOrderValue: 0,
+      returnRate: 0,
+      chargebackCount: 0,
+      fraudReports: 0,
+      lastOrderDate: null,
+      createdAt: null,
+      updatedAt: null
+    };
+  }
+
   const responseData = {
-    orderInfo,
+    orderInfo: orderInfo ? {
+      ...orderInfo,
+      customerPhone: finalCustomerPhone,
+      customerEmail: finalCustomerEmail
+    } : null,
     customer: customerData ? {
       id: customerData.id,
-      phone: customerData.phone || orderInfo?.customerPhone,
-      email: customerData.email || orderInfo?.customerEmail,
+      phone: finalCustomerPhone,
+      email: finalCustomerEmail,
       riskLevel: customerData.riskLevel || 'unknown',
       riskScore: customerData.riskScore || 0,
       riskFactors: customerData.riskFactors || [],
@@ -146,7 +335,7 @@ function formatResponse(
       lastOrderDate: customerData.lastOrderDate,
       createdAt: customerData.createdAt,
       updatedAt: customerData.updatedAt
-    } : null,
+    } : guestCustomerFallback,
     debug: {
       searchParams: {
         checkoutToken: checkoutToken ? `${checkoutToken.slice(0, 8)}...` : null,
@@ -160,13 +349,18 @@ function formatResponse(
     }
   };
 
-  // If no data found at all, return appropriate response
-  if (!customerData && !orderInfo) {
+  // If no data found at all, provide informative message
+  if (!customerData && !orderInfo && !guestCustomerFallback) {
     return json({
       ...responseData,
-      message: "No customer data found for the provided identifiers"
-    }, { status: 404 });
+      message: "No customer data found for the provided identifiers. This may be a guest order or the order hasn't been processed by our webhooks yet."
+    }, { 
+      status: 404,
+      headers: getCorsHeaders()
+    });
   }
 
-  return json(responseData);
+  return json(responseData, {
+    headers: getCorsHeaders()
+  });
 }
