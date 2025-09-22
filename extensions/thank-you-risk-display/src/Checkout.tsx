@@ -49,6 +49,7 @@ function ThankYouRiskDisplay() {
   const [customerData, setCustomerData] = React.useState<CustomerData | null>(null);
   const [customerLoading, setCustomerLoading] = React.useState(true);
   const [customerError, setCustomerError] = React.useState<string | null>(null);
+  const [hasFetched, setHasFetched] = React.useState(false);
   
   // Constants for retry logic
   const MAX_RETRIES = 10;
@@ -77,7 +78,15 @@ function ThankYouRiskDisplay() {
           return;
         }
         
+        // Prevent duplicate calls for the same order
+        if (hasFetched) {
+          console.log('Already fetched data for this order, skipping duplicate call');
+          setCustomerLoading(false);
+          return;
+        }
+        
         console.log('Fetching customer data for order ID:', orderId);
+        console.log('Full order confirmation data:', orderConfirmationData);
         
         // Call the backend API endpoint to get customer data - use absolute URL for sandbox environment
         // Determine backend URL with proper fallback hierarchy
@@ -91,15 +100,30 @@ function ThankYouRiskDisplay() {
           backendUrl = new URL('/api/get-order-data', process.env.REACT_APP_API_ENDPOINT).toString();
         } else if (typeof window !== 'undefined' && window.location.hostname.includes('extensions.shopifycdn.com')) {
           // 3. Development mode - use tunnel URL
-          backendUrl = 'https://active-burner-shipping-viewpicture.trycloudflare.com/api/get-order-data';
+          backendUrl = 'https://steady-bios-filters-theft.trycloudflare.com/api/get-order-data';
         } else {
           // 4. Finally default to production URL
           backendUrl = 'https://returnsx.pk/api/get-order-data';
         }
         
-        console.log('Making API request to:', `${backendUrl}?orderId=${encodeURIComponent(orderId)}`);
+        // Extract additional order data for better correlation
+        const order = (orderConfirmationData as any)?.order;
+        const orderCustomer = order?.customer;
+        const orderName = order?.orderNumber ? `#${order.orderNumber}` : undefined;
+        const customerPhone = orderCustomer?.phone;
+        const customerEmail = orderCustomer?.email;
         
-        const response = await fetch(`${backendUrl}?orderId=${encodeURIComponent(orderId)}`, {
+        // Build query parameters
+        const params = new URLSearchParams();
+        params.append('orderId', orderId);
+        if (orderName) params.append('orderName', orderName);
+        if (customerPhone) params.append('customerPhone', customerPhone);
+        if (customerEmail) params.append('customerEmail', customerEmail);
+        
+        const fullUrl = `${backendUrl}?${params.toString()}`;
+        console.log('Making API request to:', fullUrl);
+        
+        const response = await fetch(fullUrl, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -133,20 +157,25 @@ function ThankYouRiskDisplay() {
           // No customer data found - this is a new customer
           setCustomerData(null);
         }
+        
+        // Mark as successfully fetched only after successful completion
+        setHasFetched(true);
       } catch (error) {
         console.error('Error fetching customer data:', error);
         setCustomerError(`Failed to load customer data: ${error instanceof Error ? error.message : String(error)}`);
         setCustomerData(null);
+        // Reset hasFetched on error to allow retries
+        setHasFetched(false);
       } finally {
         setCustomerLoading(false);
       }
     }
     
-    // Only start fetching if we have the API available
-    if ((api as any).orderConfirmation) {
+    // Only start fetching if we have the API available and haven't fetched yet
+    if ((api as any).orderConfirmation && !hasFetched) {
       fetchCustomerDataFromBackend();
     }
-  }, [orderConfirmationData, api]);
+  }, [orderConfirmationData, api, hasFetched, config]);
 
   // Initialize analytics tracking with stable config
   const analyticsConfig = React.useMemo(() => config || {} as ExtensionConfig, [config]);
