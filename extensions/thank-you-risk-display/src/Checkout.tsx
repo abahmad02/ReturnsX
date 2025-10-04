@@ -28,6 +28,26 @@ import { ExtensionConfig, CustomerData, RiskProfileResponse, ErrorType, ErrorSta
 import { validateCustomerData, sanitizeDebugInfo } from './utils';
 import React from 'react';
 
+// Global in-memory deduplication cache (module-level, shared across all instances)
+const fetchLockCache = new Map<string, { instanceId: string; timestamp: number }>();
+const CACHE_TTL = 5000; // 5 seconds
+
+// Suppress OpenTelemetry errors that delay rendering
+if (typeof window !== 'undefined') {
+  const originalConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    const errorString = args.join(' ');
+    // Suppress OpenTelemetry/Observe metric export errors
+    if (errorString.includes('OpenTelemetry') || 
+        errorString.includes('Observe') || 
+        errorString.includes('exportMetrics') ||
+        errorString.includes('BreadcrumbsPluginFetchError')) {
+      return; // Silently ignore these errors
+    }
+    originalConsoleError.apply(console, args);
+  };
+}
+
 // Extension entry point for the Thank You page
 export default reactExtension(
   'purchase.thank-you.block.render',
@@ -51,18 +71,33 @@ function ThankYouRiskDisplay() {
   const [customerError, setCustomerError] = React.useState<string | null>(null);
   const [hasFetched, setHasFetched] = React.useState(false);
   
+  // Use refs to prevent duplicate calls and track fetch state reliably
+  const fetchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  
   // Constants for retry logic
   const MAX_RETRIES = 10;
   const RETRY_DELAY = 200; // Start with 200ms, increase with backoff
+  const FETCH_TIMEOUT = 3000; // 3 second timeout for fetch to prevent delays
+  
+  // Global deduplication constants
+  const FETCH_CACHE_KEY = 'returnsx_fetch_lock';
+  const CACHE_TTL = 5000; // 5 seconds - prevents duplicates across all extension instances
+  
+  // Generate unique instance ID for this component mount
+  const instanceId = React.useMemo(() => 
+    Math.random().toString(36).substring(2, 11), 
+    []
+  );
+  
+  // Extract orderId OUTSIDE useEffect with useMemo (correct React pattern)
+  const orderId = React.useMemo(() => {
+    return (orderConfirmationData as any)?.order?.id;
+  }, [(orderConfirmationData as any)?.order?.id]);
   
   React.useEffect(() => {
     async function fetchCustomerDataFromBackend(retryCount = 0) {
       try {
-        setCustomerLoading(true);
-        
-        // Get order ID from OrderConfirmationApi
-        const orderId = (orderConfirmationData as any)?.order?.id;
-        
+        // Get order ID from useMemo'd value
         if (!orderId) {
           if (retryCount >= MAX_RETRIES) {
             console.error(`Failed to get order ID after ${MAX_RETRIES} retries, giving up`);
@@ -78,32 +113,57 @@ function ThankYouRiskDisplay() {
           return;
         }
         
-        // Prevent duplicate calls for the same order
-        if (hasFetched) {
-          console.log('Already fetched data for this order, skipping duplicate call');
-          setCustomerLoading(false);
-          return;
+        // 🔒 GLOBAL DEDUPLICATION: Check in-memory lock across ALL extension instances
+        const lockKey = `${FETCH_CACHE_KEY}_${orderId}`;
+        const existingLock = fetchLockCache.get(lockKey);
+        
+        if (existingLock) {
+          const now = Date.now();
+          
+          // If lock is still valid (within TTL), skip this fetch
+          if (now - existingLock.timestamp < CACHE_TTL) {
+            console.log(`[Dedup ${instanceId}] Skipping fetch - locked by instance ${existingLock.instanceId} (${Math.round((now - existingLock.timestamp) / 1000)}s ago)`);
+            setCustomerLoading(false);
+            return;
+          } else {
+            console.log(`[Dedup ${instanceId}] Lock expired (${Math.round((now - existingLock.timestamp) / 1000)}s old), acquiring new lock`);
+          }
         }
+        
+        // 🔐 ACQUIRE LOCK: Set lock in module-level Map before fetching
+        const lock = {
+          instanceId,
+          orderId,
+          timestamp: Date.now()
+        };
+        fetchLockCache.set(lockKey, lock);
+        console.log(`[Fetch ${instanceId}] Acquired lock for order ${orderId}`);
+        
+        setCustomerLoading(true);
+        setHasFetched(true); // Mark that we've attempted fetch
+        
+        // Set aggressive timeout to prevent OpenTelemetry errors from blocking UI
+        const timeoutPromise = new Promise((_, reject) => {
+          fetchTimeoutRef.current = setTimeout(() => {
+            reject(new Error('Fetch timeout - showing fallback UI'));
+          }, FETCH_TIMEOUT);
+        });
         
         console.log('Fetching customer data for order ID:', orderId);
         console.log('Full order confirmation data:', orderConfirmationData);
         
         // Call the backend API endpoint to get customer data - use absolute URL for sandbox environment
-        // Determine backend URL with proper fallback hierarchy
+        // ALWAYS use config.api_endpoint if available (set by Shopify app)
         let backendUrl: string;
         
         if (config?.api_endpoint) {
-          // 1. Prefer config.api_endpoint when present
+          // Use the API endpoint from extension config (most reliable)
           backendUrl = new URL('/api/get-order-data', config.api_endpoint).toString();
-        } else if (typeof process !== 'undefined' && process.env?.REACT_APP_API_ENDPOINT) {
-          // 2. Fall back to environment variable
-          backendUrl = new URL('/api/get-order-data', process.env.REACT_APP_API_ENDPOINT).toString();
-        } else if (typeof window !== 'undefined' && window.location.hostname.includes('extensions.shopifycdn.com')) {
-          // 3. Development mode - use tunnel URL
-          backendUrl = 'https://steady-bios-filters-theft.trycloudflare.com/api/get-order-data';
+          console.log(`[Fetch ${instanceId}] Using config API endpoint: ${config.api_endpoint}`);
         } else {
-          // 4. Finally default to production URL
+          // Fallback to production URL if config not loaded
           backendUrl = 'https://returnsx.pk/api/get-order-data';
+          console.warn(`[Fetch ${instanceId}] No config.api_endpoint, using fallback: ${backendUrl}`);
         }
         
         // Extract additional order data for better correlation
@@ -123,59 +183,112 @@ function ThankYouRiskDisplay() {
         const fullUrl = `${backendUrl}?${params.toString()}`;
         console.log('Making API request to:', fullUrl);
         
-        const response = await fetch(fullUrl, {
+        // Race between fetch and timeout
+        const fetchPromise = fetch(fullUrl, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
         });
         
-        console.log('API response status:', response.status, response.statusText);
+        const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+        
+        // Clear timeout if fetch succeeded
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+          fetchTimeoutRef.current = null;
+        }
+        
+        console.log(`[Fetch ${instanceId}] API response status:`, response.status, response.statusText);
         
         if (!response.ok) {
           throw new Error(`API call failed: ${response.status} ${response.statusText}`);
         }
         
         const apiData = await response.json();
+        console.log(`[Fetch ${instanceId}] API response data:`, JSON.stringify(apiData).substring(0, 200));
         
+        // Check for error in response
         if (apiData.error) {
-          throw new Error(apiData.error);
+          const errorMsg = apiData.error.message || apiData.error;
+          console.error(`[Fetch ${instanceId}] API returned error:`, errorMsg);
+          throw new Error(errorMsg);
         }
         
-        // Extract customer data from API response
-        const customer = apiData.customer;
-        const orderInfo = apiData.orderInfo;
+        // NEW API RESPONSE FORMAT: { data: { customer, orderInfo }, metadata, debug }
+        const customer = apiData.data?.customer;
+        const orderInfo = apiData.data?.orderInfo;
         
-        if (customer || orderInfo) {
+        if (customer && orderInfo) {
+          console.log(`[Fetch ${instanceId}] Found customer data - Risk: ${customer.riskLevel}`);
           setCustomerData({
-            phone: customer?.phone || orderInfo?.customerPhone || undefined,
-            email: customer?.email || orderInfo?.customerEmail || undefined,
-            orderId: orderInfo?.orderId || orderId,
-            checkoutToken: undefined, // No longer using checkout tokens
+            phone: customer.phone || orderInfo.customerPhone || undefined,
+            email: customer.email || orderInfo.customerEmail || undefined,
+            orderId: orderInfo.orderId || orderId,
+            checkoutToken: undefined,
           });
         } else {
           // No customer data found - this is a new customer
+          console.log(`[Fetch ${instanceId}] No customer data found - new customer`);
           setCustomerData(null);
         }
         
-        // Mark as successfully fetched only after successful completion
-        setHasFetched(true);
+        console.log(`[Fetch ${instanceId}] Successfully fetched customer data for order ${orderId}`);
+        
       } catch (error) {
-        console.error('Error fetching customer data:', error);
-        setCustomerError(`Failed to load customer data: ${error instanceof Error ? error.message : String(error)}`);
-        setCustomerData(null);
-        // Reset hasFetched on error to allow retries
-        setHasFetched(false);
+        // Clear any pending timeout
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+          fetchTimeoutRef.current = null;
+        }
+        
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // 🔓 RELEASE LOCK on error so other instances can retry
+        const lockKey = `${FETCH_CACHE_KEY}_${orderId}`;
+        const currentLock = fetchLockCache.get(lockKey);
+        if (currentLock && currentLock.instanceId === instanceId) {
+          fetchLockCache.delete(lockKey);
+          console.log(`[Fetch ${instanceId}] Released lock on error`);
+        }
+        
+        // Handle different error types
+        if (errorMessage.includes('timeout')) {
+          // Timeout - show new customer fallback
+          console.warn(`[Fetch ${instanceId}] Timed out, showing new customer fallback:`, errorMessage);
+          setCustomerData(null);
+          setCustomerError(null);
+        } else if (errorMessage.includes('NOT_FOUND') || errorMessage.includes('No customer data found')) {
+          // NOT_FOUND from API - this is a new customer (not an error)
+          console.log(`[Fetch ${instanceId}] Customer not found (new customer):`, errorMessage);
+          setCustomerData(null);
+          setCustomerError(null);
+        } else {
+          // Real error - show error state
+          console.error(`[Fetch ${instanceId}] Error fetching customer data:`, error);
+          setCustomerError(`Failed to load customer data: ${errorMessage}`);
+          setCustomerData(null);
+        }
       } finally {
         setCustomerLoading(false);
       }
     }
     
-    // Only start fetching if we have the API available and haven't fetched yet
-    if ((api as any).orderConfirmation && !hasFetched) {
+    // Trigger fetch when orderId becomes available and we haven't fetched yet
+    if (orderId && (api as any).orderConfirmation && !hasFetched) {
       fetchCustomerDataFromBackend();
     }
-  }, [orderConfirmationData, api, hasFetched, config]);
+  }, [orderId, api, config, hasFetched]);
+  
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+        fetchTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Initialize analytics tracking with stable config
   const analyticsConfig = React.useMemo(() => config || {} as ExtensionConfig, [config]);

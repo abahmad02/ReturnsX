@@ -101,7 +101,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     try {
       // Create hashed identifier for privacy
       const identifier = phone || email || customerId;
-      const hashedIdentifier = await createCustomerHash(identifier);
 
       riskProfile = await getRiskProfile({
         hashedPhone: phone ? await createCustomerHash(phone) : null,

@@ -5,6 +5,32 @@ import { getCustomerProfileByPhone } from "../services/customerProfile.server";
 import { logger } from "../services/logger.server";
 import prisma from "../db.server";
 
+// Import optimization services
+import { requestDeduplicator, RequestParams } from "../services/requestDeduplicator.server";
+import { EnhancedCircuitBreaker, CircuitBreakerError, DEFAULT_ENHANCED_CONFIG } from "../services/enhancedCircuitBreaker.server";
+import { getCache } from "../services/intelligentCache.server";
+import { securityValidator, ValidatedParams } from "../services/securityValidator.server";
+import { responseFormatter, ResponseMetadata } from "../services/responseFormatter.server";
+import { apiLogger } from "../services/apiLogger.server";
+import { ErrorFactory, ApiError } from "../services/apiError.server";
+import { randomUUID } from 'crypto';
+
+// Initialize optimization services
+const circuitBreaker = new EnhancedCircuitBreaker({
+  ...DEFAULT_ENHANCED_CONFIG,
+  failureThreshold: 3,
+  recoveryTimeout: 30000, // 30 seconds
+  requestTimeout: 10000,   // 10 seconds
+});
+
+const cache = getCache({
+  defaultTTL: 5 * 60 * 1000,        // 5 minutes
+  maxSize: 500,                      // 500 entries
+  backgroundRefreshThreshold: 0.2,   // Refresh when 20% TTL remaining
+  compressionEnabled: true,
+  compressionThreshold: 1024,        // 1KB
+});
+
 /**
  * Safely convert a value to a finite number or return a fallback
  * Handles null, undefined, NaN, Infinity, and non-numeric values
@@ -44,89 +70,254 @@ function safeToNumberString(value: any, fallback: string = "0"): string {
 }
 
 /**
- * Handle OPTIONS request for CORS preflight
- * Returns a Response with proper CORS headers for preflight requests
- */
-function handleOptionsRequest(): Response {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Max-Age": "86400",
-    },
-  });
-}
-
-/**
  * Handle non-GET requests (POST, PUT, DELETE, etc.)
  */
 export async function action({ request }: LoaderFunctionArgs) {
   if (request.method === "OPTIONS") {
-    return handleOptionsRequest();
+    return responseFormatter.options();
   }
   
-  return new Response("Method not allowed", { 
-    status: 405,
-    headers: getCorsHeaders()
-  });
+  const requestId = randomUUID();
+  const startTime = Date.now();
+  
+  apiLogger.logRequest(
+    requestId,
+    request.method,
+    '/api/get-order-data',
+    {},
+    request.headers.get('user-agent') || undefined,
+    request.headers.get('x-forwarded-for') || undefined
+  );
+  
+  const metadata = responseFormatter.createMetadata(requestId, startTime);
+  
+  apiLogger.logResponse(requestId, 405, Date.now() - startTime);
+  
+  return responseFormatter.error(
+    ErrorFactory.validation('Method not allowed', 'METHOD_NOT_ALLOWED'),
+    metadata
+  );
 }
 
 /**
- * API endpoint to get order data based on checkout token
+ * Optimized API endpoint to get order data based on checkout token
+ * Integrates deduplication, circuit breaker, caching, and comprehensive error handling
  * Used by the extension to fetch customer risk data
  */
 export async function loader({ request }: LoaderFunctionArgs) {
+  const startTime = Date.now();
+  const requestId = randomUUID();
+  
   // Handle OPTIONS request for CORS preflight
   if (request.method === "OPTIONS") {
-    return handleOptionsRequest();
+    return responseFormatter.options();
   }
 
   const url = new URL(request.url);
-  const checkoutToken = url.searchParams.get("checkoutToken");
-  const customerPhone = url.searchParams.get("customerPhone");
-  const orderName = url.searchParams.get("orderName");
-  const orderId = url.searchParams.get("orderId");
+  const userAgent = request.headers.get('user-agent') || undefined;
+  const ipAddress = request.headers.get('x-forwarded-for') || undefined;
 
-  logger.info("API: Getting order data", {
-    component: "getOrderData",
-    checkoutToken: checkoutToken ? `${checkoutToken.slice(0, 8)}...` : "none",
-    customerPhone: customerPhone ? `${customerPhone.slice(0, 3)}***` : "none",
-    orderName,
-    orderId: orderId ? `${orderId.slice(0, 20)}...` : "none"
-  });
+  // Log incoming request
+  apiLogger.logRequest(
+    requestId,
+    request.method,
+    '/api/get-order-data',
+    Object.fromEntries(url.searchParams.entries()),
+    userAgent,
+    ipAddress
+  );
 
-  // If no identifiers provided, return error
-  if (!checkoutToken && !customerPhone && !orderName && !orderId) {
-    return json({
-      error: "Missing required parameter: checkoutToken, customerPhone, orderName, or orderId"
-    }, { 
-      status: 400,
-      headers: getCorsHeaders()
-    });
+  try {
+    // Step 1: Input validation and sanitization
+    const validationResult = securityValidator.validateInput(url.searchParams);
+    
+    if (!validationResult.isValid) {
+      apiLogger.logValidationErrors(requestId, validationResult.errors);
+      
+      const metadata = responseFormatter.createMetadata(requestId, startTime);
+      apiLogger.logResponse(requestId, 400, Date.now() - startTime);
+      
+      return responseFormatter.validationError(
+        validationResult.errors,
+        metadata
+      );
+    }
+
+    const validatedParams = validationResult.sanitizedValue as ValidatedParams;
+    
+    // Step 2: Generate deduplication key
+    const requestParams: RequestParams = {
+      checkoutToken: validatedParams.checkoutToken,
+      customerPhone: validatedParams.customerPhone,
+      orderName: validatedParams.orderName,
+      orderId: validatedParams.orderId
+    };
+    
+    const deduplicationKey = requestDeduplicator.generateRequestKey(requestParams);
+    
+    // Step 3: Execute with deduplication and circuit breaker
+    const result = await requestDeduplicator.registerRequest(
+      deduplicationKey,
+      () => executeOptimizedRequest(validatedParams, requestId, startTime),
+      requestId
+    );
+
+    return result;
+
+  } catch (error) {
+    // Handle any unexpected errors
+    apiLogger.logError(requestId, error instanceof Error ? error : new Error(String(error)));
+    
+    const metadata = responseFormatter.createMetadata(requestId, startTime);
+    apiLogger.logResponse(requestId, 500, Date.now() - startTime, undefined, false, 0, 
+      error instanceof Error ? error.message : String(error));
+    
+    if (error instanceof ApiError) {
+      return responseFormatter.error(error, metadata);
+    }
+    
+    return responseFormatter.internalError(
+      metadata,
+      'An unexpected error occurred'
+    );
   }
-
-  return await getOrderDataInternal(checkoutToken, customerPhone, orderName, orderId);
 }
 
 /**
- * Internal function to get order data
- * Separated for reduced complexity
+ * Execute optimized request with circuit breaker and caching
  */
-async function getOrderDataInternal(
-  checkoutToken: string | null, 
-  customerPhone: string | null, 
-  orderName: string | null,
-  orderId: string | null
-) {
-  try {
-    let customerData = null;
-    let orderInfo = null;
+async function executeOptimizedRequest(
+  validatedParams: ValidatedParams,
+  requestId: string,
+  startTime: number
+): Promise<Response> {
+  const queryStartTime = Date.now();
+  let queryCount = 0;
+  let cacheHit = false;
+  let deduplicationHit = false;
 
+  try {
+    // Step 1: Check cache first
+    const cacheKey = generateCacheKey(validatedParams);
+    let cachedData = cache.get(cacheKey);
+    
+    if (cachedData) {
+      cacheHit = true;
+      apiLogger.logCacheOperation(requestId, 'hit', cacheKey);
+      
+      const metadata = responseFormatter.createMetadata(requestId, startTime, {
+        cacheHit: true,
+        dataSource: 'cache',
+        queryCount: 0,
+        deduplicationHit
+      });
+      
+      apiLogger.logResponse(requestId, 200, Date.now() - startTime, 
+        JSON.stringify(cachedData).length, true, 0);
+      
+      return responseFormatter.success(cachedData, metadata);
+    }
+
+    apiLogger.logCacheOperation(requestId, 'miss', cacheKey);
+
+    // Step 2: Execute database operations with circuit breaker
+    const orderData = await circuitBreaker.execute(async () => {
+      return await getOrderDataWithOptimization(validatedParams, requestId);
+    }, 'getOrderData');
+
+    queryCount = orderData.queryCount || 0;
+    const queryTime = Date.now() - queryStartTime;
+
+    // Step 3: Cache the result
+    if (orderData.data) {
+      await cache.set(cacheKey, orderData.data, 5 * 60 * 1000); // 5 minutes TTL
+      apiLogger.logCacheOperation(requestId, 'set', cacheKey, 5 * 60 * 1000, 
+        JSON.stringify(orderData.data).length);
+    }
+
+    // Step 4: Format and return response
+    const metadata = responseFormatter.createMetadata(requestId, startTime, {
+      cacheHit: false,
+      dataSource: 'database',
+      queryCount,
+      deduplicationHit,
+      circuitBreakerState: circuitBreaker.getState()
+    });
+
+    apiLogger.logPerformanceMetrics(requestId, {
+      responseTime: Date.now() - startTime,
+      queryTime,
+      memoryUsage: process.memoryUsage().heapUsed
+    });
+
+    if (!orderData.data) {
+      apiLogger.logResponse(requestId, 404, Date.now() - startTime, 0, false, queryCount);
+      return responseFormatter.notFound(
+        orderData.message || 'No customer data found for the provided identifiers',
+        metadata,
+        orderData.debug
+      );
+    }
+
+    apiLogger.logResponse(requestId, 200, Date.now() - startTime, 
+      JSON.stringify(orderData.data).length, false, queryCount);
+    
+    return responseFormatter.success(orderData.data, metadata, orderData.message, orderData.debug);
+
+  } catch (error) {
+    apiLogger.logError(requestId, error instanceof Error ? error : new Error(String(error)));
+    
+    if (error instanceof CircuitBreakerError) {
+      apiLogger.logCircuitBreakerEvent(requestId, 'trip', circuitBreaker.getState());
+      
+      const metadata = responseFormatter.createMetadata(requestId, startTime, {
+        circuitBreakerState: circuitBreaker.getState()
+      });
+      
+      apiLogger.logResponse(requestId, 503, Date.now() - startTime, 0, false, queryCount);
+      
+      return responseFormatter.circuitBreakerOpen(metadata, error.retryAfter);
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Generate cache key for request parameters
+ */
+function generateCacheKey(params: ValidatedParams): string {
+  const keyParts: string[] = [];
+  
+  if (params.checkoutToken) keyParts.push(`ct:${params.checkoutToken}`);
+  if (params.customerPhone) keyParts.push(`ph:${params.customerPhone}`);
+  if (params.orderName) keyParts.push(`on:${params.orderName}`);
+  if (params.orderId) keyParts.push(`oi:${params.orderId}`);
+  
+  return `order-data:${keyParts.join('|')}`;
+}
+
+/**
+ * Get order data with database optimization
+ */
+async function getOrderDataWithOptimization(
+  params: ValidatedParams,
+  requestId: string
+): Promise<{
+  data?: any;
+  message?: string;
+  debug?: any;
+  queryCount: number;
+}> {
+  let queryCount = 0;
+  let customerData = null;
+  let orderInfo = null;
+
+  try {
     // Try to get correlation data by checkout token first
-    if (checkoutToken) {
-      const correlation = await getCheckoutCorrelation(checkoutToken);
+    if (params.checkoutToken) {
+      queryCount++;
+      const correlation = await getCheckoutCorrelation(params.checkoutToken);
       if (correlation) {
         orderInfo = {
           orderId: correlation.orderId,
@@ -140,25 +331,34 @@ async function getOrderDataInternal(
         
         // If we have customer phone from correlation, fetch their profile
         if (correlation.customerPhone) {
-          customerData = await getCustomerProfileByPhone(correlation.customerPhone);
+          try {
+            queryCount++;
+            customerData = await getCustomerProfileByPhone(correlation.customerPhone);
+          } catch (error) {
+            // Customer lookup failed - log but don't throw
+            apiLogger.logWarning(requestId, "Customer lookup failed in checkout correlation", {
+              phone: correlation.customerPhone.substring(0, 3) + "***",
+              error: error instanceof Error ? error.message : String(error)
+            });
+            customerData = null;
+          }
         }
       }
     }
 
     // If no data yet and we have orderId, try to extract and lookup from internal database
-    if (!customerData && !orderInfo && orderId) {
-      // Extract numeric ID from Shopify GID (e.g., gid://shopify/OrderIdentity/5971448463430)
-      const numericOrderId = orderId.includes('/') ? orderId.split('/').pop() : orderId;
+    if (!customerData && !orderInfo && params.orderId) {
+      const numericOrderId = params.orderId;
       
-      logger.info("Looking up order by numeric ID", { 
-        component: "getOrderData",
-        originalOrderId: orderId,
+      apiLogger.logInfo(requestId, "Looking up order by numeric ID", { 
+        originalOrderId: params.orderId,
         extractedNumericOrderId: numericOrderId 
       });
       
       if (numericOrderId && numericOrderId !== '0' && Number.isFinite(Number(numericOrderId))) {
         try {
           // Look up order events in our database to find customer data
+          queryCount++;
           const orderEvents = await prisma.orderEvent.findMany({
             where: {
               shopifyOrderId: numericOrderId
@@ -207,6 +407,7 @@ async function getOrderDataInternal(
             };
           } else {
             // Try to find checkout correlation data as fallback
+            queryCount++;
             const correlations = await prisma.checkoutCorrelation.findMany({
               where: {
                 orderId: numericOrderId
@@ -232,76 +433,104 @@ async function getOrderDataInternal(
               
               // Try to get customer profile by phone
               if (correlation.customerPhone) {
-                customerData = await getCustomerProfileByPhone(correlation.customerPhone);
+                try {
+                  queryCount++;
+                  customerData = await getCustomerProfileByPhone(correlation.customerPhone);
+                } catch (error) {
+                  // Customer lookup failed - log but don't throw
+                  apiLogger.logWarning(requestId, "Customer lookup failed in correlation", {
+                    phone: correlation.customerPhone.substring(0, 3) + "***",
+                    error: error instanceof Error ? error.message : String(error)
+                  });
+                  customerData = null;
+                }
               }
             } else {
-              logger.warn("Order not found in database", {
-                component: "getOrderData",
+              apiLogger.logWarning(requestId, "Order not found in database", {
                 orderId: numericOrderId
               });
             }
           }
         } catch (error) {
-          logger.error("Error fetching order from database", {
-            component: "getOrderData",
+          apiLogger.logError(requestId, error instanceof Error ? error : new Error(String(error)), {
             orderId: numericOrderId,
-            error: error instanceof Error ? error.message : String(error)
+            operation: 'database_lookup'
           });
+          
+          // Check if this is a database connection error
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes('Authentication failed') || 
+              errorMessage.includes('Connection refused') ||
+              errorMessage.includes('database server') ||
+              errorMessage.includes('ECONNREFUSED')) {
+            // For database connection issues, return 404 instead of 500
+            // This allows the API to degrade gracefully
+            apiLogger.logWarning(requestId, "Database unavailable, returning not found", {
+              orderId: numericOrderId,
+              error: errorMessage
+            });
+            // Don't throw - just continue without database data
+          } else {
+            // For other database errors, still throw
+            throw ErrorFactory.database('Error fetching order from database', true, {
+              requestId,
+              orderId: numericOrderId
+            });
+          }
         }
       }
     }
 
     // If no data yet and we have customerPhone, try direct customer lookup
-    if (!customerData && customerPhone) {
-      customerData = await getCustomerProfileByPhone(customerPhone);
+    if (!customerData && params.customerPhone) {
+      try {
+        queryCount++;
+        customerData = await getCustomerProfileByPhone(params.customerPhone);
+      } catch (error) {
+        // Customer lookup failed - log but don't throw
+        apiLogger.logWarning(requestId, "Customer lookup failed, continuing without data", {
+          phone: params.customerPhone.substring(0, 3) + "***",
+          error: error instanceof Error ? error.message : String(error)
+        });
+        customerData = null;
+      }
     }
 
-    return formatResponse(orderInfo, customerData, checkoutToken, customerPhone, orderName, orderId);
+    return formatOptimizedResponse(orderInfo, customerData, params, queryCount);
 
   } catch (error) {
-    logger.error("Error in get-order-data API", {
-      component: "getOrderData",
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
+    apiLogger.logError(requestId, error instanceof Error ? error : new Error(String(error)), {
+      operation: 'getOrderDataWithOptimization',
+      params: securityValidator.sanitizeForLogging(params)
     });
 
-    return json({
-      error: "Internal server error",
-      debug: {
-        timestamp: new Date().toISOString(),
-        message: error instanceof Error ? error.message : String(error)
-      }
-    }, { 
-      status: 500,
-      headers: getCorsHeaders()
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    throw ErrorFactory.database('Database operation failed', true, {
+      requestId,
+      originalError: error instanceof Error ? error.message : String(error)
     });
   }
 }
 
 /**
- * Get CORS headers for Shopify extensions
+ * Format the optimized API response data
  */
-function getCorsHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "https://extensions.shopifycdn.com",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
-}
-
-/**
- * Format the API response data
- */
-function formatResponse(
+function formatOptimizedResponse(
   orderInfo: any, 
   customerData: any, 
-  checkoutToken: string | null,
-  customerPhone: string | null,
-  orderName: string | null,
-  orderId: string | null
-) {
+  params: ValidatedParams,
+  queryCount: number
+): {
+  data?: any;
+  message?: string;
+  debug?: any;
+  queryCount: number;
+} {
   // Ensure we have customer identifiers either in customer data or orderInfo
-  const finalCustomerPhone = customerData?.phone || orderInfo?.customerPhone || customerPhone;
+  const finalCustomerPhone = customerData?.phone || orderInfo?.customerPhone || params.customerPhone;
   const finalCustomerEmail = customerData?.email || orderInfo?.customerEmail;
 
   // Create a guest customer fallback if we have no customer data but have identifiers
@@ -348,32 +577,34 @@ function formatResponse(
       lastOrderDate: customerData.lastOrderDate,
       createdAt: customerData.createdAt,
       updatedAt: customerData.updatedAt
-    } : guestCustomerFallback,
-    debug: {
-      searchParams: {
-        checkoutToken: checkoutToken ? `${checkoutToken.slice(0, 8)}...` : null,
-        customerPhone: customerPhone ? `${customerPhone.slice(0, 3)}***` : null,
-        orderName,
-        orderId: orderId ? `${orderId.slice(0, 20)}...` : null
-      },
-      foundCorrelation: !!orderInfo,
-      foundCustomer: !!customerData,
-      timestamp: new Date().toISOString()
-    }
+    } : guestCustomerFallback
   };
 
-  // If no data found at all, provide informative message
+  const debug = {
+    searchParams: securityValidator.sanitizeForLogging({
+      checkoutToken: params.checkoutToken,
+      customerPhone: params.customerPhone,
+      orderName: params.orderName,
+      orderId: params.orderId
+    }),
+    foundCorrelation: !!orderInfo,
+    foundCustomer: !!customerData,
+    timestamp: new Date().toISOString(),
+    queryCount
+  };
+
+  // If no data found at all, return not found
   if (!customerData && !orderInfo && !guestCustomerFallback) {
-    return json({
-      ...responseData,
-      message: "No customer data found for the provided identifiers. This may be a guest order or the order hasn't been processed by our webhooks yet."
-    }, { 
-      status: 404,
-      headers: getCorsHeaders()
-    });
+    return {
+      message: "No customer data found for the provided identifiers. This may be a guest order or the order hasn't been processed by our webhooks yet.",
+      debug,
+      queryCount
+    };
   }
 
-  return json(responseData, {
-    headers: getCorsHeaders()
-  });
+  return {
+    data: responseData,
+    debug,
+    queryCount
+  };
 }

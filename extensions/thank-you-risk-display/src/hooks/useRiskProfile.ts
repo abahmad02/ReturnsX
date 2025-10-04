@@ -159,25 +159,69 @@ export function useRiskProfile({
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         handleError(error instanceof Error ? error : new Error(errorMessage), 'useRiskProfile:fetch');
         
-        // Determine error type based on error message
+        // Determine error type based on error message and new consistent error format
         let errorType = ErrorType.NETWORK_ERROR;
         let retryable = true;
         
-        if (errorMessage.includes('Authentication') || errorMessage.includes('401') || errorMessage.includes('403')) {
-          errorType = ErrorType.AUTHENTICATION_ERROR;
-          
-          // Try to handle authentication error and retry
-          if (apiClientRef.current) {
-            const recoverySuccess = await apiClientRef.current.handleAuthenticationError(error);
-            if (!recoverySuccess) {
-              retryable = false; // Don't retry if auth recovery failed
+        // Try to parse structured error from optimized API
+        try {
+          const errorData = JSON.parse(errorMessage);
+          if (errorData.error && errorData.error.type) {
+            const apiError = errorData.error;
+            
+            // Map API error types to client error types
+            switch (apiError.type) {
+              case 'VALIDATION_ERROR':
+                errorType = ErrorType.CONFIGURATION_ERROR;
+                retryable = false;
+                break;
+              case 'AUTHENTICATION_ERROR':
+                errorType = ErrorType.AUTHENTICATION_ERROR;
+                retryable = apiError.retryable !== false;
+                break;
+              case 'NOT_FOUND_ERROR':
+                // Not found is handled as success with new customer profile
+                errorType = ErrorType.NETWORK_ERROR;
+                retryable = false;
+                break;
+              case 'TIMEOUT_ERROR':
+                errorType = ErrorType.TIMEOUT_ERROR;
+                retryable = true;
+                break;
+              case 'CIRCUIT_BREAKER_ERROR':
+              case 'RATE_LIMIT_ERROR':
+                errorType = ErrorType.NETWORK_ERROR;
+                retryable = true;
+                break;
+              default:
+                errorType = ErrorType.NETWORK_ERROR;
+                retryable = apiError.retryable !== false;
+                break;
             }
+          } else {
+            throw new Error('Not a structured error');
           }
-        } else if (errorMessage.includes('timeout')) {
-          errorType = ErrorType.TIMEOUT_ERROR;
-        } else if (errorMessage.includes('Configuration') || errorMessage.includes('Invalid')) {
-          errorType = ErrorType.CONFIGURATION_ERROR;
-          retryable = false;
+        } catch {
+          // Fallback to legacy error handling
+          if (errorMessage.includes('Authentication') || errorMessage.includes('401') || errorMessage.includes('403')) {
+            errorType = ErrorType.AUTHENTICATION_ERROR;
+            
+            // Try to handle authentication error and retry
+            if (apiClientRef.current) {
+              const recoverySuccess = await apiClientRef.current.handleAuthenticationError(error);
+              if (!recoverySuccess) {
+                retryable = false; // Don't retry if auth recovery failed
+              }
+            }
+          } else if (errorMessage.includes('timeout')) {
+            errorType = ErrorType.TIMEOUT_ERROR;
+          } else if (errorMessage.includes('Configuration') || errorMessage.includes('Invalid')) {
+            errorType = ErrorType.CONFIGURATION_ERROR;
+            retryable = false;
+          } else if (errorMessage.includes('Service temporarily unavailable')) {
+            errorType = ErrorType.NETWORK_ERROR;
+            retryable = true;
+          }
         }
         
         const errorState: ErrorState = {

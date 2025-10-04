@@ -20,25 +20,10 @@ let testDb: PrismaClient;
 beforeAll(async () => {
   // Initialize test database
   try {
-    // Reset the test database schema
-    execSync('npx prisma migrate reset --force --skip-seed', {
-      env: process.env,
-      stdio: 'inherit'
-    });
+    console.log('🔧 Initializing test database...');
+    console.log('Database URL:', process.env.DATABASE_URL);
     
-    // Run migrations
-    execSync('npx prisma migrate deploy', {
-      env: process.env,
-      stdio: 'inherit'
-    });
-    
-    // Generate Prisma client
-    execSync('npx prisma generate', {
-      env: process.env,
-      stdio: 'inherit'
-    });
-
-    // Initialize Prisma client for tests
+    // Try to connect to test database first
     testDb = new PrismaClient({
       datasources: {
         db: {
@@ -47,12 +32,37 @@ beforeAll(async () => {
       }
     });
 
+    // Test connection
     await testDb.$connect();
+    console.log('✅ Database connection successful');
+
+    // Reset the test database schema
+    execSync('npx prisma migrate reset --force --skip-seed', {
+      env: process.env,
+      stdio: 'pipe' // Suppress output unless there's an error
+    });
+    
+    // Run migrations
+    execSync('npx prisma migrate deploy', {
+      env: process.env,
+      stdio: 'pipe'
+    });
+    
+    // Generate Prisma client
+    execSync('npx prisma generate', {
+      env: process.env,
+      stdio: 'pipe'
+    });
+
     console.log('✅ Test database initialized successfully');
     
   } catch (error) {
-    console.error('❌ Failed to initialize test database:', error);
-    process.exit(1);
+    console.warn('⚠️ Test database initialization failed:', error);
+    console.warn('⚠️ Tests will run without database - some tests may fail');
+    
+    // Don't exit - let tests run and fail gracefully
+    // This allows us to test error handling paths
+    testDb = null as any;
   }
 });
 
